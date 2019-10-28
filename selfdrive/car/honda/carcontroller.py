@@ -191,11 +191,11 @@ class CarController():
         # if we detect gas pedal pressed, we do not want OP to apply gas or brake
         # gasPressed code from interface.py
         # if not CS.CP.enableGasInterceptor:
-        #   gasPressed = CS.pedal_gas > 0
+        #   gas_pressed = CS.pedal_gas > 0
         # else:
-        #   gasPressed = CS.user_gas_pressed
+        #   gas_pressed = CS.user_gas_pressed
         # dragon_apply_brake = apply_brake
-        # if self.dragon_allow_gas and gasPressed:
+        # if self.dragon_allow_gas and gas_pressed:
         #   dragon_apply_brake = 0
         #   apply_gas = 0
         can_sends.append(hondacan.create_brake_command(self.packer, apply_brake, pump_on,

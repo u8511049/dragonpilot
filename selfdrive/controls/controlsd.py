@@ -512,7 +512,7 @@ def controlsd_thread(sm=None, pm=None, can_sock=None):
 
   # FIXME: offroad alerts should not be created with negative severity
   connectivity_alert = params.get("Offroad_ConnectivityNeeded", encoding='utf8')
-  internet_needed = connectivity_alert is not None and json.loads(connectivity_alert.replace("'", "\""))["severity"] >= 0
+  internet_needed = connectivity_alert is not None and json.loads(connectivity_alert)["severity"] >= 0
 
   prof = Profiler(False)  # off by default
 
@@ -559,7 +559,10 @@ def controlsd_thread(sm=None, pm=None, can_sock=None):
     if sm['plan'].radarCanError:
       events.append(create_event('radarCanError', [ET.NO_ENTRY, ET.SOFT_DISABLE]))
     if not CS.canValid:
-      events.append(create_event('canError', [ET.NO_ENTRY, ET.IMMEDIATE_DISABLE]))
+      if dragon_toyota_stock_dsu:
+        events.append(create_event('pcmDisable', [ET.USER_DISABLE]))
+      else:
+        events.append(create_event('canError', [ET.NO_ENTRY, ET.IMMEDIATE_DISABLE]))
     if not sounds_available:
       events.append(create_event('soundsUnavailable', [ET.NO_ENTRY, ET.PERMANENT]))
     # if internet_needed:

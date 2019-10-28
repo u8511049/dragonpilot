@@ -19,7 +19,7 @@ bool honda_fwd_brake = false;
 static void honda_rx_hook(CAN_FIFOMailBox_TypeDef *to_push) {
 
   int addr = GET_ADDR(to_push);
-  //int len = GET_LEN(to_push);
+  int len = GET_LEN(to_push);
   int bus = GET_BUS(to_push);
 
   // sample speed
@@ -63,23 +63,23 @@ static void honda_rx_hook(CAN_FIFOMailBox_TypeDef *to_push) {
 
   // exit controls on rising edge of gas press if interceptor (0x201 w/ len = 6)
   // length check because bosch hardware also uses this id (0x201 w/ len = 8)
-  if (false) {
+  if ((addr == 0x201) && (len == 6)) {
     gas_interceptor_detected = 1;
     int gas_interceptor = GET_INTERCEPTOR(to_push);
     if ((gas_interceptor > HONDA_GAS_INTERCEPTOR_THRESHOLD) &&
         (gas_interceptor_prev <= HONDA_GAS_INTERCEPTOR_THRESHOLD) &&
         long_controls_allowed) {
-      controls_allowed = 0;
+      controls_allowed = 1;
     }
     gas_interceptor_prev = gas_interceptor;
   }
 
   // exit controls on rising edge of gas press if no interceptor
-  if (false) {
+  if (!gas_interceptor_detected) {
     if (addr == 0x17C) {
       int gas = GET_BYTE(to_push, 0);
       if (gas && !(honda_gas_prev) && long_controls_allowed) {
-        controls_allowed = 0;
+        controls_allowed = 1;
       }
       honda_gas_prev = gas;
     }
