@@ -123,6 +123,7 @@ class CarController():
     # self.dragon_allow_gas = False
     self.dragon_lat_ctrl = True
     self.dragon_lane_departure_warning = True
+    self.dragon_toyota_sng_mod = False
 
   def update(self, enabled, CS, frame, actuators,
              pcm_cancel_cmd, hud_alert, forwarding_camera, left_line,
@@ -133,6 +134,7 @@ class CarController():
       # self.dragon_allow_gas = True if params.get("DragonAllowGas", encoding='utf8') == "1" else False
       self.dragon_lat_ctrl = False if params.get("DragonLatCtrl", encoding='utf8') == "0" else True
       self.dragon_lane_departure_warning = False if params.get("DragonToyotaLaneDepartureWarning", encoding='utf8') == "0" else True
+      self.dragon_toyota_sng_mod = True if params.get("DragonToyotaSnGMod", encoding='utf8') == "1" else False
 
     # *** compute control surfaces ***
 
@@ -191,7 +193,7 @@ class CarController():
       pcm_cancel_cmd = 1
 
     # on entering standstill, send standstill request
-    if CS.standstill and not self.last_standstill:
+    if not self.dragon_toyota_sng_mod and CS.standstill and not self.last_standstill:
       self.standstill_req = True
     if CS.pcm_acc_status != 8:
       # pcm entered standstill or it's disabled

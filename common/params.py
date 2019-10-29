@@ -140,6 +140,7 @@ keys = {
   "DragonCarVIN": [TxType.PERSISTENT],
   "DragonEnableSlowOnCurve": [TxType.PERSISTENT],
   "DragonEnableLeadCarMovingAlert": [TxType.PERSISTENT],
+  "DragonToyotaSnGMod": [TxType.PERSISTENT],
 }
 
 
