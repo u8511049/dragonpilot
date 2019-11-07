@@ -334,12 +334,6 @@
     <family>
         <font weight="400" style="normal">NotoSansSymbols-Regular-Subsetted.ttf</font>
     </family>
-    <family lang="zh-Hans">
-        <font weight="400" style="normal">NotoSansSC-Regular.otf</font>
-    </family>
-    <family lang="zh-Hant">
-        <font weight="400" style="normal">NotoSansTC-Regular.otf</font>
-    </family>
     <family lang="ja">
         <font weight="400" style="normal">NotoSansJP-Regular.otf</font>
     </family>
@@ -352,8 +346,15 @@
     <family>
         <font weight="400" style="normal">NotoColorEmoji.ttf</font>
     </family>
-    <family>
-        <font weight="400" style="normal">Miui-Regular.ttf</font>
+    <family lang="zh-Hans">
+        <font weight="400" style="normal">NotoSansCJKtc-Regular.otf</font>
+        <font weight="500" style="normal">NotoSansCJKtc-Medium.otf</font>
+        <font weight="700" style="normal">NotoSansCJKtc-Bold.otf</font>
+    </family>
+    <family lang="zh-Hant">
+        <font weight="400" style="normal">NotoSansCJKtc-Regular.otf</font>
+        <font weight="500" style="normal">NotoSansCJKtc-Medium.otf</font>
+        <font weight="700" style="normal">NotoSansCJKtc-Bold.otf</font>
     </family>
     <family lang="ja">
         <font weight="400" style="normal">MTLmr3m.ttf</font>

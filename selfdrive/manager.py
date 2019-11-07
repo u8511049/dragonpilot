@@ -1,5 +1,6 @@
 #!/usr/bin/env python3.7
 import os
+import time
 import sys
 import fcntl
 import errno
@@ -60,7 +61,6 @@ from common.params import Params
 import cereal
 ThermalStatus = cereal.log.ThermalData.ThermalStatus
 
-from selfdrive.services import service_list
 from selfdrive.swaglog import cloudlog
 import selfdrive.messaging as messaging
 from selfdrive.registration import register
@@ -88,7 +88,7 @@ managed_processes = {
   "ui": ("selfdrive/ui", ["./start.py"]),
   "calibrationd": "selfdrive.locationd.calibrationd",
   "paramsd": ("selfdrive/locationd", ["./paramsd"]),
-  "visiond": ("selfdrive/visiond", ["./visiond"]),
+  "visiond": ("selfdrive/visiond", ["./start.py"]),
   "sensord": ("selfdrive/sensord", ["./start_sensord.py"]),
   "gpsd": ("selfdrive/sensord", ["./start_gpsd.py"]),
   "updated": "selfdrive.updated",
@@ -97,9 +97,9 @@ managed_processes = {
   "appd": "selfdrive.dragonpilot.appd.appd",
 }
 daemon_processes = {
-  "athenad": "selfdrive.athena.athenad",
+  "manage_athenad": ("selfdrive.athena.manage_athenad", "AthenadPid"),
 }
-android_packages = ("cn.dragonpilot.gpsservice", "com.autonavi.amapauto", "com.mixplorer", "com.tomtom.speedcams.android.map", "ai.comma.plus.offroad", "ai.comma.plus.frame")
+android_packages = ("tw.com.ainvest.outpack", "cn.dragonpilot.gpsservice", "com.autonavi.amapauto", "com.mixplorer", "com.tomtom.speedcams.android.map", "ai.comma.plus.offroad", "ai.comma.plus.frame")
 
 running = {}
 def get_running():
@@ -160,9 +160,8 @@ def launcher(proc):
     # rename the process
     setproctitle(proc)
 
-    # terminate the zmq context since we forked
-    import zmq
-    zmq.Context.instance().term()
+    # create now context since we forked
+    messaging.context = messaging.Context()
 
     # exec the process
     mod.main()
@@ -198,8 +197,7 @@ def start_managed_process(name):
   running[name].start()
 
 def start_daemon_process(name, params):
-  proc = daemon_processes[name]
-  pid_param = name.capitalize() + 'Pid'
+  proc, pid_param = daemon_processes[name]
   pid = params.get(pid_param)
 
   if pid is not None:
@@ -250,8 +248,14 @@ def kill_managed_process(name):
     else:
       running[name].terminate()
 
-    # give it 5 seconds to die
-    running[name].join(5.0)
+    # Process().join(timeout) will hang due to a python 3 bug: https://bugs.python.org/issue28382
+    # We have to poll the exitcode instead
+    # running[name].join(5.0)
+
+    t = time.time()
+    while time.time() - t < 5 and running[name].exitcode is None:
+      time.sleep(0.001)
+
     if running[name].exitcode is None:
       if name in unkillable_processes:
         cloudlog.critical("unkillable process %s failed to exit! rebooting in 15 if it doesn't die" % name)
@@ -326,7 +330,7 @@ def system(cmd):
 
 def manager_thread():
   # now loop
-  thermal_sock = messaging.sub_sock(service_list['thermal'].port)
+  thermal_sock = messaging.sub_sock('thermal')
 
   cloudlog.info("manager start")
   cloudlog.info({"environ": os.environ})

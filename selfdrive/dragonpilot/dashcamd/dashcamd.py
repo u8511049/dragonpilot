@@ -28,7 +28,7 @@ def main(gctx=None):
   if not os.path.exists(dashcam_videos):
     os.makedirs(dashcam_videos)
 
-  thermal_sock = messaging.sub_sock(service_list['thermal'].port)
+  thermal_sock = messaging.sub_sock('thermal')
   while 1:
     if params.get("DragonEnableDashcam", encoding='utf8') == "1":
       now = datetime.datetime.now()

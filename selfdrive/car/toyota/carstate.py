@@ -59,7 +59,7 @@ def get_can_parser(CP):
     ("EPS_STATUS", 25),
   ]
 
-  if CP.carFingerprint == CAR.LEXUS_ISH:
+  if CP.carFingerprint in [CAR.LEXUS_ISH, CAR.LEXUS_GSH]:
     signals.append(("GAS_PEDAL", "GAS_PEDAL_ALT", 0))
     signals.append(("MAIN_ON", "PCM_CRUISE_ALT", 0))
     signals.append(("SET_SPEED", "PCM_CRUISE_ALT", 0))
@@ -161,7 +161,7 @@ class CarState():
     self.brake_pressed = cp.vl["BRAKE_MODULE"]['BRAKE_PRESSED']
     if self.CP.enableGasInterceptor:
       self.pedal_gas = (cp.vl["GAS_SENSOR"]['INTERCEPTOR_GAS'] + cp.vl["GAS_SENSOR"]['INTERCEPTOR_GAS2']) / 2.
-    elif self.CP.carFingerprint == CAR.LEXUS_ISH:
+    elif self.CP.carFingerprint in [CAR.LEXUS_ISH, CAR.LEXUS_GSH]:
       self.pedal_gas = cp.vl["GAS_PEDAL_ALT"]['GAS_PEDAL']
     else:
       self.pedal_gas = cp.vl["GAS_PEDAL"]['GAS_PEDAL']
@@ -202,7 +202,7 @@ class CarState():
     self.gear_shifter = parse_gear_shifter(can_gear, self.shifter_values)
     if self.CP.carFingerprint == CAR.LEXUS_IS:
       self.main_on = cp.vl["DSU_CRUISE"]['MAIN_ON']
-    elif self.CP.carFingerprint == CAR.LEXUS_ISH:
+    elif self.CP.carFingerprint in [CAR.LEXUS_ISH, CAR.LEXUS_GSH]:
       self.main_on = cp.vl["PCM_CRUISE_ALT"]['MAIN_ON']
     else:
       self.main_on = cp.vl["PCM_CRUISE_2"]['MAIN_ON']
@@ -223,13 +223,13 @@ class CarState():
     if self.CP.carFingerprint == CAR.LEXUS_IS:
       self.v_cruise_pcm = cp.vl["DSU_CRUISE"]['SET_SPEED']
       self.low_speed_lockout = False
-    elif self.CP.carFingerprint == CAR.LEXUS_ISH:
+    elif self.CP.carFingerprint in [CAR.LEXUS_ISH, CAR.LEXUS_GSH]:
       self.v_cruise_pcm = cp.vl["PCM_CRUISE_ALT"]['SET_SPEED']
       self.low_speed_lockout = False
     else:
       self.v_cruise_pcm = cp.vl["PCM_CRUISE_2"]['SET_SPEED']
       self.low_speed_lockout = cp.vl["PCM_CRUISE_2"]['LOW_SPEED_LOCKOUT'] == 2
-    if self.CP.carFingerprint == CAR.LEXUS_ISH:
+    if self.CP.carFingerprint in [CAR.LEXUS_ISH, CAR.LEXUS_GSH]:
       # Lexus ISH does not have curise status value (always 0), so we use curise_active value instead
       self.pcm_acc_status = cp.vl["PCM_CRUISE"]['CRUISE_ACTIVE']
     else:
