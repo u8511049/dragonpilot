@@ -6,7 +6,7 @@ import datetime
 from smbus2 import SMBus
 from cereal import log
 from common.basedir import BASEDIR
-from common.params import Params
+from common.params import Params, put_nonblocking
 from common.realtime import sec_since_boot, DT_TRML
 from common.numpy_fast import clip, interp
 from common.filter_simple import FirstOrderFilter
@@ -157,15 +157,17 @@ def thermald_thread():
   time_valid_prev = True
 
   # dragonpilot
-  ts_last_ip = 0.
-  ts_last_update_vars = 0.
-  ts_last_charging_ctrl = 0.
+  ts_last_ip = None
+  ts_last_update_vars = None
+  ts_last_charging_ctrl = None
 
   ip_addr = '255.255.255.255'
   dragon_charging_ctrl = True if params.get('DragonChargingCtrl', encoding='utf8') == "1" else False
   dragon_charging_max = int(params.get('DragonCharging'))
   dragon_discharging_min = int(params.get('DragonDisCharging'))
   charging_disabled = False
+  dragon_hw_checked = True if params.get('DragonHWChecked', encoding='utf8') == "1" else False
+  dragon_is_eon = False if params.get('DragonIsEON', encoding='utf8') == "0" else True
 
   while 1:
     health = messaging.recv_sock(health_sock, wait=True)
@@ -200,7 +202,7 @@ def thermald_thread():
     # dragonpilot ip Mod
     # update ip every 10 seconds
     ts = sec_since_boot()
-    if ts - ts_last_ip > 10.:
+    if ts_last_ip is None or ts - ts_last_ip > 10.:
       try:
         result = subprocess.check_output(["ifconfig", "wlan0"], encoding='utf8')  # pylint: disable=unexpected-keyword-arg
         ip_addr = re.findall(r"inet addr:((\d+\.){3}\d+)", result)[0][0]
@@ -217,11 +219,20 @@ def thermald_thread():
     max_comp_temp = max(max_cpu_temp, msg.thermal.mem / 10., msg.thermal.gpu / 10.)
     bat_temp = msg.thermal.bat/1000.
 
-    if health is not None:
-      if health.health.hwType == log.HealthData.HwType.uno:
-        fan_speed = handle_fan_uno(max_cpu_temp, bat_temp, fan_speed)
+    if not dragon_hw_checked:
+      put_nonblocking("DragonHWChecked", '1')
+      dragon_hw_checked = True
+      if health is not None and health.health.hwType == log.HealthData.HwType.uno:
+        dragon_is_eon = False
+        put_nonblocking("DragonIsEON", '0')
       else:
-        fan_speed = handle_fan_eon(max_cpu_temp, bat_temp, fan_speed)
+        dragon_is_eon = True
+        put_nonblocking("DragonIsEON", '1')
+
+    if not dragon_is_eon:
+      fan_speed = handle_fan_uno(max_cpu_temp, bat_temp, fan_speed)
+    else:
+      fan_speed = handle_fan_eon(max_cpu_temp, bat_temp, fan_speed)
 
     msg.thermal.fanSpeed = fan_speed
 
@@ -363,25 +374,21 @@ def thermald_thread():
     # dragonpilot
     ts = sec_since_boot()
     # update variable status every 10 secs
-    if ts - ts_last_update_vars > 10.:
+    if ts_last_update_vars is None or ts - ts_last_update_vars > 10.:
       dragon_charging_ctrl = True if params.get('DragonChargingCtrl', encoding='utf8') == "1" else False
       dragon_charging_max = int(params.get('DragonCharging', encoding='utf8'))
       dragon_discharging_min = int(params.get('DragonDisCharging', encoding='utf8'))
       ts_last_update_vars = ts
 
-    # we only update charging status once every min
-    if ts - ts_last_charging_ctrl > 60.:
+    # we update charging status once every min
+    if ts_last_charging_ctrl is None or ts - ts_last_charging_ctrl > 60.:
       if dragon_charging_ctrl:
-        if msg.thermal.batteryPercent >= dragon_charging_max and not charging_disabled:
+        if msg.thermal.batteryPercent >= dragon_charging_max:
           os.system('echo "0" > /sys/class/power_supply/battery/charging_enabled')
-          charging_disabled = True
-        if msg.thermal.batteryPercent <= dragon_discharging_min and charging_disabled:
+        if msg.thermal.batteryPercent <= dragon_discharging_min:
           os.system('echo "1" > /sys/class/power_supply/battery/charging_enabled')
-          charging_disabled = False
       else:
-        if charging_disabled:
-          os.system('echo "1" > /sys/class/power_supply/battery/charging_enabled')
-          charging_disabled = False
+        os.system('echo "1" > /sys/class/power_supply/battery/charging_enabled')
       ts_last_charging_ctrl = ts
 
     # report to server once per minute

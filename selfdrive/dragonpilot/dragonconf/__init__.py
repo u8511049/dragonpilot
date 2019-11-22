@@ -54,6 +54,8 @@ default_conf = {
   'DragonEnableSlowOnCurve': '1',
   'DragonEnableLeadCarMovingAlert': '0',
   'DragonToyotaSnGMod': '0',
+  'DragonIsEON': '1',
+  'DragonHWChecked': '0',
 }
 
 deprecated_conf = {

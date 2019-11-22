@@ -14,11 +14,11 @@ params = Params()
 tomtom = "com.tomtom.speedcams.android.map"
 tomtom_main = "com.tomtom.speedcams.android.activities.SpeedCamActivity"
 
-# v4.3.0.600100 Beta
+# v4.3.0.600310 R2098NSLAE
 autonavi = "com.autonavi.amapauto"
 autonavi_main = "com.autonavi.amapauto.MainMapActivity"
 
-# v6.39.2
+# v6.40.3
 mixplorer = "com.mixplorer"
 mixplorer_main = "com.mixplorer.activities.BrowseActivity"
 

@@ -217,7 +217,7 @@ def state_transition(frame, CS, CP, state, events, soft_disable_timer, v_cruise_
 
 
 def state_control(frame, rcv_frame, plan, path_plan, CS, CP, state, events, v_cruise_kph, v_cruise_kph_last,
-                  AM, rk, driver_status, LaC, LoC, read_only, is_metric, cal_perc, dragon_lat_control, dragon_display_steering_limit_alert):
+                  AM, rk, driver_status, LaC, LoC, read_only, is_metric, cal_perc, dragon_lat_control, dragon_display_steering_limit_alert, dragon_lead_car_moving_alert):
   """Given the state, this function returns an actuators packet"""
 
   actuators = car.CarControl.Actuators.new_message()
@@ -240,6 +240,11 @@ def state_control(frame, rcv_frame, plan, path_plan, CS, CP, state, events, v_cr
   # State specific actions
 
   if state in [State.preEnabled, State.disabled]:
+    if dragon_lead_car_moving_alert:
+      for e in get_events(events, [ET.WARNING]):
+        extra_text = ""
+        if e in ["leadCarDetected", "leadCarMoving"]:
+          AM.add(frame, e, enabled, extra_text_2=extra_text)
     LaC.reset()
     LoC.reset(v_pid=CS.vEgo)
 
@@ -568,15 +573,18 @@ def controlsd_thread(sm=None, pm=None, can_sock=None):
 
     if dragon_lead_car_moving_alert:
       # when car has a lead and is standstill and lead is barely moving, we start counting
-      if not CP.radarOffCan and sm['plan'].hasLead and CS.vEgo < 0.05 and 0.3 >= abs(sm['plan'].vTarget) >= 0:
+      if not CP.radarOffCan and sm['plan'].hasLead and CS.vEgo <= 0.01 and 0.3 >= abs(sm['plan'].vTarget) >= 0:
         dragon_stopped_has_lead_count += 1
       else:
         dragon_stopped_has_lead_count = 0
 
       # when we detect lead car over a sec and the lead car is started moving, we are ready to send alerts
       # once the condition is triggered, we want to keep the trigger
-      if dragon_stopped_has_lead_count >= 50 and abs(sm['plan'].vTargetFuture) >= 0.1:
-        events.append(create_event('leadCarMoving', [ET.WARNING]))
+      if dragon_stopped_has_lead_count >= 100:
+        if abs(sm['plan'].vTargetFuture) >= 0.1:
+          events.append(create_event('leadCarMoving', [ET.WARNING]))
+        else:
+          events.append(create_event('leadCarDetected', [ET.WARNING]))
 
       # we remove alert once our car is moving
       if CS.vEgo > 0.:
@@ -591,7 +599,7 @@ def controlsd_thread(sm=None, pm=None, can_sock=None):
     # Compute actuators (runs PID loops and lateral MPC)
     actuators, v_cruise_kph, driver_status, v_acc, a_acc, lac_log = \
       state_control(sm.frame, sm.rcv_frame, sm['plan'], sm['pathPlan'], CS, CP, state, events, v_cruise_kph, v_cruise_kph_last, AM, rk,
-                    driver_status, LaC, LoC, read_only, is_metric, cal_perc, dragon_lat_control, dragon_display_steering_limit_alert)
+                    driver_status, LaC, LoC, read_only, is_metric, cal_perc, dragon_lat_control, dragon_display_steering_limit_alert, dragon_lead_car_moving_alert)
 
     prof.checkpoint("State Control")
 

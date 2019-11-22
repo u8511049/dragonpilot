@@ -2688,8 +2688,8 @@ int main(int argc, char* argv[]) {
       if (s->controls_seen && s->vision_connected && strcmp(s->scene.alert_text2, "Controls Unresponsive") != 0) {
         s->scene.alert_size = ALERTSIZE_FULL;
         update_status(s, STATUS_ALERT);
-        snprintf(s->scene.alert_text1, sizeof(s->scene.alert_text1), "%s", "TAKE CONTROL IMMEDIATELY");
-        snprintf(s->scene.alert_text2, sizeof(s->scene.alert_text2), "%s", "Controls Unresponsive");
+        snprintf(s->scene.alert_text1, sizeof(s->scene.alert_text1), "%s", "即刻接管控制");
+        snprintf(s->scene.alert_text2, sizeof(s->scene.alert_text2), "%s", "操控服務沒有反應");
         ui_draw_vision_alert(s, s->scene.alert_size, s->status, s->scene.alert_text1, s->scene.alert_text2);
 
         s->alert_sound_timeout = 2 * UI_FREQ;

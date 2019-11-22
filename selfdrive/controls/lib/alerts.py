@@ -196,7 +196,7 @@ ALERTS = [
 
   Alert(
       "steerTempUnavailableNoEntry",
-      "無法使用 openpilot",
+      "無法使用 dragonpilot",
       "轉向控制暫時失效",
       AlertStatus.normal, AlertSize.mid,
       Priority.LOW, VisualAlert.none, AudibleAlert.chimeError, .4, 0., 3.),
@@ -635,8 +635,8 @@ ALERTS = [
 
   Alert(
       "invalidGiraffeToyotaNoEntry",
-      "openpilot Unavailable",
-      "Visit comma.ai/tg",
+      "無法使用 dragonpilot",
+      "請瀏覽 comma.ai/tg",
       AlertStatus.normal, AlertSize.mid,
       Priority.LOW, VisualAlert.none, AudibleAlert.chimeDisengage, .4, 2., 3.),
 
@@ -740,8 +740,14 @@ ALERTS = [
     Priority.LOW, VisualAlert.none, AudibleAlert.none, .0, .1, .1, alert_rate=0.25),
   Alert(
     "leadCarMoving",
-    "LEAD CAR IS MOVING",
-    "Resume Driving Manually",
-    AlertStatus.userPrompt, AlertSize.mid,
+    "前車移動中，請開始加速",
+    "",
+    AlertStatus.userPrompt, AlertSize.small,
     Priority.LOW, VisualAlert.steerRequired, AudibleAlert.chimeWarning2, .1, .1, .1),
+  Alert(
+    "leadCarDetected",
+    "偵測到前車，等待中",
+    "",
+    AlertStatus.normal, AlertSize.small,
+    Priority.LOW, VisualAlert.none, AudibleAlert.none, .0, .1, .1, alert_rate=0.25),
 ]
