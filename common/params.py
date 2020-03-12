@@ -168,6 +168,7 @@ keys = {
   "DragonBTG": [TxType.PERSISTENT],
   "DragonBootHotspot": [TxType.PERSISTENT],
   "DragonAccelProfile": [TxType.PERSISTENT],
+  "DragonLastModified": [TxType.PERSISTENT],
 }
 
 

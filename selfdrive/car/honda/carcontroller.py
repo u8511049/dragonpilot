@@ -9,6 +9,7 @@ from selfdrive.car.honda.values import CruiseButtons, CAR, VISUAL_HUD
 from opendbc.can.packer import CANPacker
 from common.params import Params
 params = Params()
+from selfdrive.dragonpilot.dragonconf import dp_get_last_modified
 
 VisualAlert = car.CarControl.HUDControl.VisualAlert
 
@@ -96,14 +97,18 @@ class CarController():
     self.turning_signal_timer = 0
     self.dragon_enable_steering_on_signal = False
     self.dragon_lat_ctrl = True
+    self.dp_last_modified = None
 
   def update(self, enabled, CS, frame, actuators, \
              pcm_speed, pcm_override, pcm_cancel_cmd, pcm_accel, \
              hud_v_cruise, hud_show_lanes, hud_show_car, hud_alert):
     # dragonpilot, don't check for param too often as it's a kernel call
     if frame % 500 == 0:
-      self.dragon_enable_steering_on_signal = True if params.get("DragonEnableSteeringOnSignal", encoding='utf8') == "1" else False
-      self.dragon_lat_ctrl = False if params.get("DragonLatCtrl", encoding='utf8') == "0" else True
+      modified = dp_get_last_modified()
+      if self.dp_last_modified != modified:
+        self.dragon_enable_steering_on_signal = True if params.get("DragonEnableSteeringOnSignal", encoding='utf8') == "1" else False
+        self.dragon_lat_ctrl = False if params.get("DragonLatCtrl", encoding='utf8') == "0" else True
+        self.dp_last_modified = modified
 
     # *** apply brake hysteresis ***
     brake, self.braking, self.brake_steady = actuator_hystereses(actuators.brake, self.braking, self.brake_steady, CS.v_ego, CS.CP.carFingerprint)

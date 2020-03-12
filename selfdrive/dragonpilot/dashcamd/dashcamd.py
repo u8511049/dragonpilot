@@ -29,7 +29,7 @@ def main(gctx=None):
 
   thermal_sock = messaging.sub_sock('thermal')
   while 1:
-    if params.get("DragonWazeMode", encoding='utf8') == "0" and params.get("DragonEnableDashcam", encoding='utf8') == "1":
+    if params.get("DragonEnableDashcam", encoding='utf8') == "1":
       now = datetime.datetime.now()
       file_name = now.strftime("%Y-%m-%d_%H-%M-%S")
       os.system("screenrecord --bit-rate %s --time-limit %s %s%s.mp4 &" % (bit_rates, duration, dashcam_videos, file_name))

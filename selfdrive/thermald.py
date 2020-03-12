@@ -24,6 +24,7 @@ FW_SIGNATURE = get_expected_signature()
 params = Params()
 import subprocess
 import re
+from selfdrive.dragonpilot.dragonconf import dp_get_last_modified
 
 ThermalStatus = log.ThermalData.ThermalStatus
 NetworkType = log.ThermalData.NetworkType
@@ -185,13 +186,14 @@ def thermald_thread():
 
   # dragonpilot
   ts_last_ip = None
-  ts_last_update_vars = None
+  ts_last_update_vars = 0
   ts_last_charging_ctrl = None
+  dp_last_modified = None
 
   ip_addr = '255.255.255.255'
-  dragon_charging_ctrl = True if params.get('DragonChargingCtrl', encoding='utf8') == "1" else False
-  dragon_charging_max = int(params.get('DragonCharging'))
-  dragon_discharging_min = int(params.get('DragonDisCharging'))
+  dragon_charging_ctrl = False
+  dragon_to_discharge = 70
+  dragon_to_charge = 60
 
   while 1:
     health = messaging.recv_sock(health_sock, wait=True)
@@ -241,7 +243,7 @@ def thermald_thread():
     # dragonpilot ip Mod
     # update ip every 10 seconds
     ts = sec_since_boot()
-    if ts_last_ip is None or ts - ts_last_ip > 10.:
+    if ts_last_ip is None or ts - ts_last_ip >= 10.:
       try:
         result = subprocess.check_output(["ifconfig", "wlan0"], encoding='utf8')  # pylint: disable=unexpected-keyword-arg
         ip_addr = re.findall(r"inet addr:((\d+\.){3}\d+)", result)[0][0]
@@ -412,18 +414,28 @@ def thermald_thread():
     # dragonpilot
     ts = sec_since_boot()
     # update variable status every 10 secs
-    if ts_last_update_vars is None or ts - ts_last_update_vars >= 10.:
-      dragon_charging_ctrl = True if params.get('DragonChargingCtrl', encoding='utf8') == "1" else False
-      dragon_charging_max = int(params.get('DragonCharging', encoding='utf8'))
-      dragon_discharging_min = int(params.get('DragonDisCharging', encoding='utf8'))
+    if ts - ts_last_update_vars >= 10.:
+      modified = dp_get_last_modified()
+      if dp_last_modified != modified:
+        dragon_charging_ctrl = True if params.get('DragonChargingCtrl', encoding='utf8') == "1" else False
+        if dragon_charging_ctrl:
+          try:
+            dragon_to_discharge = int(params.get('DragonCharging', encoding='utf8'))
+          except TypeError:
+            dragon_to_discharge = 70
+          try:
+            dragon_to_charge = int(params.get('DragonDisCharging', encoding='utf8'))
+          except TypeError:
+            dragon_to_charge = 60
+        dp_last_modified = modified
       ts_last_update_vars = ts
 
     # we update charging status once every min
     if ts_last_charging_ctrl is None or ts - ts_last_charging_ctrl >= 60.:
       if dragon_charging_ctrl:
-        if msg.thermal.batteryPercent >= dragon_charging_max:
+        if msg.thermal.batteryPercent >= dragon_to_discharge:
           os.system('echo "0" > /sys/class/power_supply/battery/charging_enabled')
-        if msg.thermal.batteryPercent <= dragon_discharging_min:
+        if msg.thermal.batteryPercent <= dragon_to_charge:
           os.system('echo "1" > /sys/class/power_supply/battery/charging_enabled')
       else:
         os.system('echo "1" > /sys/class/power_supply/battery/charging_enabled')

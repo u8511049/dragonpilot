@@ -77,7 +77,7 @@ class LanePlanner():
 
   def update_d_poly(self, v_ego):
     ts = sec_since_boot()
-    if ts - self.ts_last_check > 5.:
+    if ts - self.ts_last_check >= 5.:
       self.camera_offset = int(params.get("DragonCameraOffset", encoding='utf8')) * 0.01
       self.ts_last_check = ts
     # only offset left and right lane lines; offsetting p_poly does not make sense

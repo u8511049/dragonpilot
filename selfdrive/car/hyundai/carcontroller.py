@@ -4,7 +4,7 @@ from selfdrive.car.hyundai.values import Buttons, SteerLimitParams
 from opendbc.can.packer import CANPacker
 from common.params import Params
 params = Params()
-
+from selfdrive.dragonpilot.dragonconf import dp_get_last_modified
 
 class CarController():
   def __init__(self, dbc_name, car_fingerprint):
@@ -20,13 +20,17 @@ class CarController():
     self.turning_signal_timer = 0
     self.dragon_enable_steering_on_signal = False
     self.dragon_lat_ctrl = True
+    self.dp_last_modified = None
 
   def update(self, enabled, CS, frame, actuators, pcm_cancel_cmd, hud_alert):
 
     # dragonpilot, don't check for param too often as it's a kernel call
     if frame % 500 == 0:
-      self.dragon_enable_steering_on_signal = True if params.get("DragonEnableSteeringOnSignal", encoding='utf8') == "1" else False
-      self.dragon_lat_ctrl = False if params.get("DragonLatCtrl", encoding='utf8') == "0" else True
+      modified = dp_get_last_modified()
+      if self.dp_last_modified != modified:
+        self.dragon_enable_steering_on_signal = True if params.get("DragonEnableSteeringOnSignal", encoding='utf8') == "1" else False
+        self.dragon_lat_ctrl = False if params.get("DragonLatCtrl", encoding='utf8') == "0" else True
+        self.dp_last_modified = modified
 
     ### Steering Torque
     new_steer = actuators.steer * SteerLimitParams.STEER_MAX

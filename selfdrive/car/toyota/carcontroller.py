@@ -8,6 +8,7 @@ from selfdrive.car.toyota.values import Ecu, CAR, STATIC_MSGS, SteerLimitParams
 from opendbc.can.packer import CANPacker
 from common.params import Params
 params = Params()
+from selfdrive.dragonpilot.dragonconf import dp_get_last_modified
 
 VisualAlert = car.CarControl.HUDControl.VisualAlert
 
@@ -109,16 +110,20 @@ class CarController():
     self.dragon_lat_ctrl = True
     self.dragon_lane_departure_warning = True
     self.dragon_toyota_sng_mod = False
+    self.dp_last_modified = None
 
   def update(self, enabled, CS, frame, actuators, pcm_cancel_cmd, hud_alert,
              left_line, right_line, lead, left_lane_depart, right_lane_depart):
 
     # dragonpilot, don't check for param too often as it's a kernel call
     if frame % 500 == 0:
-      self.dragon_enable_steering_on_signal = True if params.get("DragonEnableSteeringOnSignal", encoding='utf8') == "1" else False
-      self.dragon_lat_ctrl = False if params.get("DragonLatCtrl", encoding='utf8') == "0" else True
-      self.dragon_lane_departure_warning = False if params.get("DragonToyotaLaneDepartureWarning", encoding='utf8') == "0" else True
-      self.dragon_toyota_sng_mod = True if params.get("DragonToyotaSnGMod", encoding='utf8') == "1" else False
+      modified = dp_get_last_modified()
+      if self.dp_last_modified != modified:
+        self.dragon_enable_steering_on_signal = True if params.get("DragonEnableSteeringOnSignal", encoding='utf8') == "1" else False
+        self.dragon_lat_ctrl = False if params.get("DragonLatCtrl", encoding='utf8') == "0" else True
+        self.dragon_lane_departure_warning = False if params.get("DragonToyotaLaneDepartureWarning", encoding='utf8') == "0" else True
+        self.dragon_toyota_sng_mod = True if params.get("DragonToyotaSnGMod", encoding='utf8') == "1" else False
+        self.dp_last_modified = modified
 
     # *** compute control surfaces ***
 

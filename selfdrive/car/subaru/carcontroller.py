@@ -3,7 +3,9 @@ from selfdrive.car import apply_std_steer_torque_limits
 from selfdrive.car.subaru import subarucan
 from selfdrive.car.subaru.values import DBC
 from opendbc.can.packer import CANPacker
-
+from common.params import Params
+params = Params()
+from selfdrive.dragonpilot.dragonconf import dp_get_last_modified
 
 class CarControllerParams():
   def __init__(self, car_fingerprint):
@@ -32,8 +34,22 @@ class CarController():
     self.params = CarControllerParams(car_fingerprint)
     self.packer = CANPacker(DBC[car_fingerprint]['pt'])
 
+    # dragonpilot
+    self.turning_signal_timer = 0
+    self.dragon_enable_steering_on_signal = False
+    self.dragon_lat_ctrl = True
+    self.dp_last_modified = None
+
   def update(self, enabled, CS, frame, actuators, pcm_cancel_cmd, visual_alert, left_line, right_line):
     """ Controls thread """
+
+    # dragonpilot, don't check for param too often as it's a kernel call
+    if frame % 500 == 0:
+      modified = dp_get_last_modified()
+      if self.dp_last_modified != modified:
+        self.dragon_enable_steering_on_signal = True if params.get("DragonEnableSteeringOnSignal", encoding='utf8') == "1" else False
+        self.dragon_lat_ctrl = False if params.get("DragonLatCtrl", encoding='utf8') == "0" else True
+        self.dp_last_modified = modified
 
     P = self.params
 
@@ -57,6 +73,23 @@ class CarController():
 
       if not lkas_enabled:
         apply_steer = 0
+
+      # dragonpilot
+      if enabled:
+        if self.dragon_enable_steering_on_signal:
+          if CS.left_blinker_on == 0 and CS.right_blinker_on == 0:
+            self.turning_signal_timer = 0
+          else:
+            self.turning_signal_timer = 100
+
+          if self.turning_signal_timer > 0:
+            self.turning_signal_timer -= 1
+            apply_steer = 0
+        else:
+          self.turning_signal_timer = 0
+
+        if not self.dragon_lat_ctrl:
+          apply_steer = 0
 
       can_sends.append(subarucan.create_steering_control(self.packer, CS.CP.carFingerprint, apply_steer, frame, P.STEER_STEP))
 

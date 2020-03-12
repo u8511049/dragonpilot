@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 import gc
-from common.realtime import set_realtime_priority
+from common.realtime import set_realtime_priority, sec_since_boot
 from common.params import Params, put_nonblocking
 import cereal.messaging as messaging
 from selfdrive.controls.lib.drive_helpers import create_event, EventTypes as ET
 from selfdrive.controls.lib.driver_monitor import DriverStatus, MAX_TERMINAL_ALERTS, MAX_TERMINAL_DURATION
 from selfdrive.locationd.calibration_helpers import Calibration
 from selfdrive.controls.lib.gps_helpers import is_rhd_region
+from common.params import Params
+params = Params()
+from selfdrive.dragonpilot.dragonconf import dp_get_last_modified
 
 def dmonitoringd_thread(sm=None, pm=None):
   gc.disable()
@@ -40,8 +43,46 @@ def dmonitoringd_thread(sm=None, pm=None):
   v_cruise_last = 0
   driver_engaged = False
 
+  # dragonpilot
+  last_ts = 0
+  dp_last_modified = None
+  dp_enable_driver_safety_check = True
+  dp_enable_driver_monitoring = True
+
   # 10Hz <- dmonitoringmodeld
   while True:
+    cur_time = sec_since_boot()
+    if cur_time - last_ts >= 5.:
+      modified = dp_get_last_modified()
+      if dp_last_modified != modified:
+        dp_enable_driver_safety_check = False if params.get("DragonEnableDriverSafetyCheck", encoding='utf8') == "0" else True
+        # load driver monitor val only when safety is on
+        if dp_enable_driver_safety_check:
+          dp_enable_driver_monitoring = False if params.get("DragonEnableDriverMonitoring", encoding='utf8') == "0" else True
+        # load steering monitor timer val only when driver monitor is on
+        if dp_enable_driver_safety_check:
+          try:
+            dp_awareness_time = int(params.get("DragonSteeringMonitorTimer", encoding='utf8'))
+          except TypeError:
+            dp_awareness_time = 0.
+          driver_status.awareness_time = 86400 if dp_awareness_time <= 0. else dp_awareness_time * 60.
+        dp_last_modified = modified
+      last_ts = cur_time
+
+    if not dp_enable_driver_safety_check:
+      dp_enable_driver_monitoring = False
+      driver_status.awareness_time = 86400
+
+    # reset all awareness val and set to rhd region, this will enforce steering monitor.
+    if not dp_enable_driver_monitoring:
+      driver_status.is_rhd_region = True
+      driver_status.is_rhd_region_checked = True
+      driver_status.awareness = 1.
+      driver_status.awareness_active = 1.
+      driver_status.awareness_passive = 1.
+      driver_status.terminal_alert_cnt = 0
+      driver_status.terminal_time = 0
+
     sm.update()
 
     # GPS coords RHD parsing, once every restart

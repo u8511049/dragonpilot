@@ -13,6 +13,7 @@ from selfdrive.controls.lib.speed_smoother import speed_smoother
 from selfdrive.controls.lib.longcontrol import LongCtrlState, MIN_CAN_SPEED
 from selfdrive.controls.lib.fcw import FCWChecker
 from selfdrive.controls.lib.long_mpc import LongitudinalMpc
+from selfdrive.dragonpilot.dragonconf import dp_get_last_modified
 
 MAX_SPEED = 255.0
 
@@ -111,6 +112,7 @@ class Planner():
     self.dragon_fast_accel = False
     self.dragon_accel_profile = ACCEL_NORMAL_MODE
     self.last_ts = 0.
+    self.dp_last_modified = None
 
   def choose_solution(self, v_cruise_setpoint, enabled):
     if enabled:
@@ -147,10 +149,13 @@ class Planner():
     # dragonpilot
     # update variable status every 5 secs
     if cur_time - self.last_ts >= 5.:
-      self.dragon_slow_on_curve = False if self.params.get("DragonEnableSlowOnCurve", encoding='utf8') == "0" else True
-      self.dragon_accel_profile = int(self.params.get("DragonAccelProfile", encoding='utf8'))
-      if self.dragon_accel_profile >= 2 or self.dragon_accel_profile <= -2:
-        self.dragon_accel_profile = 0
+      modified = dp_get_last_modified()
+      if self.dp_last_modified != modified:
+        self.dragon_slow_on_curve = False if self.params.get("DragonEnableSlowOnCurve", encoding='utf8') == "0" else True
+        self.dragon_accel_profile = int(self.params.get("DragonAccelProfile", encoding='utf8'))
+        if self.dragon_accel_profile >= 2 or self.dragon_accel_profile <= -2:
+          self.dragon_accel_profile = 0
+        self.dp_last_modified = modified
       self.last_ts = cur_time
 
     long_control_state = sm['controlsState'].longControlState

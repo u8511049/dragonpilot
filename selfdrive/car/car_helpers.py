@@ -237,6 +237,7 @@ def get_car(logcan, sendcan, has_relay=False):
       y.start()
 
     cloudlog.warning("car doesn't match any fingerprints: %r", fingerprints)
+    cloudlog.warning("car doesn't match any fw: %s" % car_fw)
     candidate = "mock"
 
   if is_online():

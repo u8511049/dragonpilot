@@ -14,6 +14,7 @@ from selfdrive.controls.lib.planner import _A_CRUISE_MAX_V_FOLLOWING
 from selfdrive.car.interfaces import CarInterfaceBase
 from common.params import Params
 params = Params()
+from selfdrive.dragonpilot.dragonconf import dp_get_last_modified
 
 A_ACC_MAX = max(_A_CRUISE_MAX_V_FOLLOWING)
 
@@ -105,6 +106,7 @@ class CarInterface(CarInterfaceBase):
     self.dragon_allow_gas = False
     self.ts_last_check = 0.
     self.dragon_lat_ctrl = True
+    self.dp_last_modified = None
 
   @staticmethod
   def calc_accel_override(a_ego, a_target, v_ego, v_target):
@@ -386,10 +388,13 @@ class CarInterface(CarInterfaceBase):
   def update(self, c, can_strings):
     # dragonpilot, don't check for param too often as it's a kernel call
     ts = sec_since_boot()
-    if ts - self.ts_last_check > 5.:
-      self.dragon_enable_steering_on_signal = True if params.get("DragonEnableSteeringOnSignal", encoding='utf8') == "1" else True
-      self.dragon_allow_gas = True if params.get("DragonAllowGas", encoding='utf8') == "1" else False
-      self.dragon_lat_ctrl = False if params.get("DragonLatCtrl", encoding='utf8') == "0" else True
+    if ts - self.ts_last_check >= 5.:
+      modified = dp_get_last_modified()
+      if self.dp_last_modified != modified:
+        self.dragon_enable_steering_on_signal = True if params.get("DragonEnableSteeringOnSignal", encoding='utf8') == "1" else True
+        self.dragon_allow_gas = True if params.get("DragonAllowGas", encoding='utf8') == "1" else False
+        self.dragon_lat_ctrl = False if params.get("DragonLatCtrl", encoding='utf8') == "0" else True
+        self.dp_last_modified = modified
       self.ts_last_check = ts
 
     # ******************* do can recv *******************

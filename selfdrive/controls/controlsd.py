@@ -25,6 +25,7 @@ from selfdrive.controls.lib.alertmanager import AlertManager
 from selfdrive.controls.lib.vehicle_model import VehicleModel
 from selfdrive.controls.lib.planner import LON_MPC_STEP
 from selfdrive.locationd.calibration_helpers import Calibration, Filter
+from selfdrive.dragonpilot.dragonconf import dp_get_last_modified
 
 LANE_DEPARTURE_THRESHOLD = 0.1
 
@@ -546,15 +547,19 @@ def controlsd_thread(sm=None, pm=None, can_sock=None):
   dragon_display_steering_limit_alert = True
   dragon_stopped_has_lead_count = 0
   dragon_lead_car_moving_alert = False
+  dp_last_modified = None
 
   while True:
     # dragonpilot, don't check for param too often as it's a kernel call
     ts = sec_since_boot()
-    if ts - ts_last_check > 5.:
-      dragon_toyota_stock_dsu = True if params.get("DragonToyotaStockDSU", encoding='utf8') == "1" else False
-      dragon_lat_control = False if params.get("DragonLatCtrl", encoding='utf8') == "0" else True
-      dragon_display_steering_limit_alert = False if params.get("DragonDisplaySteeringLimitAlert", encoding='utf8') == "0" else True
-      dragon_lead_car_moving_alert = True if params.get("DragonEnableLeadCarMovingAlert", encoding='utf8') == "1" else False
+    if ts - ts_last_check >= 5.:
+      modified = dp_get_last_modified()
+      if dp_last_modified != modified:
+        dragon_toyota_stock_dsu = True if params.get("DragonToyotaStockDSU", encoding='utf8') == "1" else False
+        dragon_lat_control = False if params.get("DragonLatCtrl", encoding='utf8') == "0" else True
+        dragon_display_steering_limit_alert = False if params.get("DragonDisplaySteeringLimitAlert", encoding='utf8') == "0" else True
+        dragon_lead_car_moving_alert = True if params.get("DragonEnableLeadCarMovingAlert", encoding='utf8') == "1" else False
+        dp_last_modified = modified
       ts_last_check = ts
 
     start_time = sec_since_boot()

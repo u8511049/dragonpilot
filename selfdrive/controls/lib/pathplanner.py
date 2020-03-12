@@ -11,6 +11,7 @@ import cereal.messaging as messaging
 from cereal import log
 # dragonpilot
 from common.params import Params
+from selfdrive.dragonpilot.dragonconf import dp_get_last_modified
 
 LaneChangeState = log.PathPlan.LaneChangeState
 LaneChangeDirection = log.PathPlan.LaneChangeDirection
@@ -72,6 +73,7 @@ class PathPlanner():
     self.dragon_auto_lc_min_mph = 60 * CV.MPH_TO_MS
     self.dragon_auto_lc_delay = 2.
     self.last_ts = 0.
+    self.dp_last_modified = None
 
   def setup_mpc(self):
     self.libmpc = libmpc_py.libmpc
@@ -92,26 +94,29 @@ class PathPlanner():
   def update(self, sm, pm, CP, VM):
     # dragonpilot
     cur_time = sec_since_boot()
-    if cur_time - self.last_ts > 5.:
-      self.dragon_assisted_lc_enabled = self.lane_change_enabled
-      if self.dragon_assisted_lc_enabled:
-        self.dragon_auto_lc_enabled = True if self.params.get("DragonEnableAutoLC", encoding='utf8') == "1" else False
-        # adjustable assisted lc min speed
-        self.dragon_assisted_lc_min_mph = int(self.params.get("DragonAssistedLCMinMPH", encoding='utf8')) * CV.MPH_TO_MS
-        if self.dragon_assisted_lc_min_mph < 0:
-          self.dragon_assisted_lc_min_mph = 0
-        if self.dragon_auto_lc_enabled:
-          # adjustable auto lc min speed
-          self.dragon_auto_lc_min_mph = int(self.params.get("DragonAutoLCMinMPH", encoding='utf8')) * CV.MPH_TO_MS
-          if self.dragon_auto_lc_min_mph < 0:
-            self.dragon_auto_lc_min_mph = 0
-          # when auto lc is smaller than assisted lc, we set assisted lc to the same speed as auto lc
-          if self.dragon_auto_lc_min_mph < self.dragon_assisted_lc_min_mph:
-            self.dragon_assisted_lc_min_mph = self.dragon_auto_lc_min_mph
-          # adjustable auto lc delay
-          self.dragon_auto_lc_delay = int(self.params.get("DragonAutoLCDelay", encoding='utf8'))
-          if self.dragon_auto_lc_delay < 0:
-            self.dragon_auto_lc_delay = 0
+    if cur_time - self.last_ts >= 5.:
+      modified = dp_get_last_modified()
+      if self.dp_last_modified != modified:
+        self.dragon_assisted_lc_enabled = self.lane_change_enabled
+        if self.dragon_assisted_lc_enabled:
+          self.dragon_auto_lc_enabled = True if self.params.get("DragonEnableAutoLC", encoding='utf8') == "1" else False
+          # adjustable assisted lc min speed
+          self.dragon_assisted_lc_min_mph = int(self.params.get("DragonAssistedLCMinMPH", encoding='utf8')) * CV.MPH_TO_MS
+          if self.dragon_assisted_lc_min_mph < 0:
+            self.dragon_assisted_lc_min_mph = 0
+          if self.dragon_auto_lc_enabled:
+            # adjustable auto lc min speed
+            self.dragon_auto_lc_min_mph = int(self.params.get("DragonAutoLCMinMPH", encoding='utf8')) * CV.MPH_TO_MS
+            if self.dragon_auto_lc_min_mph < 0:
+              self.dragon_auto_lc_min_mph = 0
+            # when auto lc is smaller than assisted lc, we set assisted lc to the same speed as auto lc
+            if self.dragon_auto_lc_min_mph < self.dragon_assisted_lc_min_mph:
+              self.dragon_assisted_lc_min_mph = self.dragon_auto_lc_min_mph
+            # adjustable auto lc delay
+            self.dragon_auto_lc_delay = int(self.params.get("DragonAutoLCDelay", encoding='utf8'))
+            if self.dragon_auto_lc_delay < 0:
+              self.dragon_auto_lc_delay = 0
+        self.dp_last_modified = modified
       self.last_ts = cur_time
 
     v_ego = sm['carState'].vEgo

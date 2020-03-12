@@ -10,6 +10,7 @@ from selfdrive.car import STD_CARGO_KG, scale_rot_inertia, scale_tire_stiffness,
 from selfdrive.car.interfaces import CarInterfaceBase
 from common.params import Params
 params = Params()
+from selfdrive.dragonpilot.dragonconf import dp_get_last_modified
 
 GearShifter = car.CarState.GearShifter
 ButtonType = car.CarState.ButtonEvent.Type
@@ -42,6 +43,7 @@ class CarInterface(CarInterfaceBase):
     self.dragon_allow_gas = False
     self.ts_last_check = 0.
     self.dragon_lat_ctrl = True
+    self.dp_last_modified = None
 
   @staticmethod
   def compute_gb(accel, speed):
@@ -162,10 +164,13 @@ class CarInterface(CarInterfaceBase):
   def update(self, c, can_strings):
     # dragonpilot, don't check for param too often as it's a kernel call
     ts = sec_since_boot()
-    if ts - self.ts_last_check > 5.:
-      self.dragon_enable_steering_on_signal = True if params.get("DragonEnableSteeringOnSignal", encoding='utf8') == "1" else True
-      self.dragon_allow_gas = True if params.get("DragonAllowGas", encoding='utf8') == "1" else False
-      self.dragon_lat_ctrl = False if params.get("DragonLatCtrl", encoding='utf8') == "0" else True
+    if ts - self.ts_last_check >= 5.:
+      modified = dp_get_last_modified()
+      if self.dp_last_modified != modified:
+        self.dragon_enable_steering_on_signal = True if params.get("DragonEnableSteeringOnSignal", encoding='utf8') == "1" else True
+        self.dragon_allow_gas = True if params.get("DragonAllowGas", encoding='utf8') == "1" else False
+        self.dragon_lat_ctrl = False if params.get("DragonLatCtrl", encoding='utf8') == "0" else True
+        self.dp_last_modified = modified
       self.ts_last_check = ts
 
     # ******************* do can recv *******************
