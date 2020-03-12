@@ -11,12 +11,12 @@ def main():
   thermal_sock = messaging.sub_sock('thermal')
   last_ts = 0
   secs = 0
-  last_secs = 0
+  last_secs = None
   shutdown_at = 0
   started = False
   usb_online = False
   enabled = False
-  last_enabled = False
+  last_enabled = None
   dp_last_modified = None
   while 1:
     cur_time = sec_since_boot()
@@ -24,31 +24,25 @@ def main():
       modified = dp_get_last_modified()
       if dp_last_modified != modified:
         enabled = True if params.get("DragonEnableAutoShutdown", encoding='utf8') == '1' else False
-        # reset timer when enabled status has changed
-        if not last_enabled and enabled:
-          shutdown_at = cur_time + secs
-        last_enabled = enabled
-
         if enabled:
           secs = int(params.get("DragonAutoShutdownAt", encoding='utf8')) * 60
           # reset timer when secs num has changed
-          if last_secs != secs:
+          if last_secs != secs or last_enabled != enabled:
             shutdown_at = cur_time + secs
-          last_secs = secs
 
           msg = messaging.recv_sock(thermal_sock, wait=True)
           started = msg.thermal.started
           with open("/sys/class/power_supply/usb/present") as f:
             usb_online = bool(int(f.read()))
+        last_enabled = enabled
         dp_last_modified = modified
-
+      last_ts = cur_time
     if enabled:
       if started or usb_online:
         shutdown_at = cur_time + secs
       else:
         if secs > 0 and cur_time >= shutdown_at:
           os.system('LD_LIBRARY_PATH="" svc power shutdown')
-
     time.sleep(10)
 
 if __name__ == "__main__":
