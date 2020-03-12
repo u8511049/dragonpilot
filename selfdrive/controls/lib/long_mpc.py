@@ -8,18 +8,22 @@ from common.realtime import sec_since_boot
 from selfdrive.controls.lib.radar_helpers import _LEAD_ACCEL_TAU
 from selfdrive.controls.lib.longitudinal_mpc import libmpc_py
 from selfdrive.controls.lib.drive_helpers import MPC_COST_LONG
-from common.op_params import opParams
+# df + dp
 from common.numpy_fast import interp, clip
-from common.travis_checker import travis
 from selfdrive.config import Conversions as CV
+from common.params import Params
+from selfdrive.dragonpilot.dragonconf import dp_get_last_modified
 
 LOG_MPC = os.environ.get('LOG_MPC', False)
 
+# df profile
+DF_PROFILE_ROADTRIP = -1
+DF_PROFILE_STANDARD = 0
+DF_PROFILE_TRAFFIC = 1
 
 class LongitudinalMpc():
   def __init__(self, mpc_id):
     self.mpc_id = mpc_id
-    self.op_params = opParams()
 
     self.setup_mpc()
     self.v_mpc = 0.0
@@ -31,12 +35,18 @@ class LongitudinalMpc():
     self.new_lead = False
     self.last_cloudlog_t = 0.0
 
+    # df from Shane Smiskol
     self.car_data = {'v_ego': 0.0, 'a_ego': 0.0}
     self.lead_data = {'v_lead': None, 'x_lead': None, 'a_lead': None, 'status': False}
     self.df_data = {"v_leads": [], "v_egos": []}  # dynamic follow data
     self.last_cost = 0.0
-    self.df_profile = self.op_params.get('dynamic_follow', 'relaxed').strip().lower()
+    self.df_profile = DF_PROFILE_STANDARD
     self.sng = False
+
+    # dragonpilot
+    self.params = Params()
+    self.last_ts = 0
+    self.last_modified = 0
 
   def send_mpc_solution(self, pm, qp_iterations, calculation_time):
     qp_iterations = max(0, qp_iterations)
@@ -70,14 +80,13 @@ class LongitudinalMpc():
     self.cur_state[0].a_ego = a
 
   def get_TR(self, CS):
-    if not self.lead_data['status'] or travis:
+    if not self.lead_data['status']:
       TR = 1.8
     else:
       self.store_df_data()
       TR = self.dynamic_follow(CS)
 
-    if not travis:
-      self.change_cost(TR)
+    self.change_cost(TR)
     return TR
 
   def change_cost(self, TR):
@@ -119,14 +128,25 @@ class LongitudinalMpc():
     return a_lead  # if above doesn't execute, we'll return a_lead from radar
 
   def dynamic_follow(self, CS):
-    self.df_profile = self.op_params.get('dynamic_follow', 'relaxed').strip().lower()
+    ts = sec_since_boot()
+    if ts - self.last_ts >= 10.:
+      modified = dp_get_last_modified()
+      if self.last_modified != modified:
+        try:
+          self.df_profile = int(self.params.get('DragonDynamicFollow', encoding='utf8'))
+          self.df_profile = self.df_profile if self.df_profile in [DF_PROFILE_STANDARD, DF_PROFILE_ROADTRIP, DF_PROFILE_TRAFFIC] else DF_PROFILE_STANDARD
+        except TypeError:
+          self.df_profile = DF_PROFILE_STANDARD
+      self.last_modified = modified
+      self.last_ts = ts
+
     x_vel = [0.0, 1.8627, 3.7253, 5.588, 7.4507, 9.3133, 11.5598, 13.645, 22.352, 31.2928, 33.528, 35.7632, 40.2336]  # velocities
     profile_mod_x = [2.2352, 13.4112, 24.5872, 35.7632]  # profile mod speeds, mph: [5., 30., 55., 80.]
-    if self.df_profile == 'roadtrip':
+    if self.df_profile == DF_PROFILE_ROADTRIP:
       y_dist = [1.3847, 1.3946, 1.4078, 1.4243, 1.4507, 1.4837, 1.5327, 1.553, 1.581, 1.617, 1.653, 1.687, 1.74]  # TRs
       profile_mod_pos = [0.99, 0.9025, 0.815, 0.55]
       profile_mod_neg = [1.0, 1.18, 1.382, 1.787]
-    elif self.df_profile == 'traffic':  # for in congested traffic
+    elif self.df_profile == DF_PROFILE_TRAFFIC:  # for in congested traffic
       x_vel = [0.0, 1.892, 3.7432, 5.8632, 8.0727, 10.7301, 14.343, 17.6275, 22.4049, 28.6752, 34.8858, 40.35]
       y_dist = [1.3781, 1.3791, 1.3802, 1.3825, 1.3984, 1.4249, 1.4194, 1.3162, 1.1916, 1.0145, 0.9855, 0.9562]
       profile_mod_pos = [1.05, 1.375, 2.99, 3.8]
@@ -167,7 +187,7 @@ class LongitudinalMpc():
     TR_mod = sum([mod * profile_mod_neg if mod < 0 else mod * profile_mod_pos for mod in TR_mod])  # alter TR modification according to profile
     TR += TR_mod
 
-    if CS.leftBlinker or CS.rightBlinker and self.df_profile != 'traffic':
+    if CS.leftBlinker or CS.rightBlinker and self.df_profile != DF_PROFILE_TRAFFIC:
       x = [8.9408, 22.352, 31.2928]  # 20, 50, 70 mph
       y = [1.0, .75, .65]  # reduce TR when changing lanes
       TR *= interp(self.car_data['v_ego'], x, y)
