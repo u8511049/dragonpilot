@@ -26,23 +26,23 @@ def main():
         enabled = True if params.get("DragonEnableAutoShutdown", encoding='utf8') == '1' else False
         if enabled:
           secs = int(params.get("DragonAutoShutdownAt", encoding='utf8')) * 60
-          # reset timer when secs num has changed
-          if last_secs != secs or last_enabled != enabled:
-            shutdown_at = cur_time + secs
 
-          msg = messaging.recv_sock(thermal_sock, wait=True)
-          started = msg.thermal.started
-          with open("/sys/class/power_supply/usb/present") as f:
-            usb_online = bool(int(f.read()))
-        last_enabled = enabled
         dp_last_modified = modified
-      last_ts = cur_time
-    if enabled:
-      if started or usb_online:
+
+      if enabled:
+        msg = messaging.recv_sock(thermal_sock, wait=True)
+        started = msg.thermal.started
+        usb_online = msg.thermal.usbOnline
+
+      if last_enabled != enabled or last_secs != secs or started or usb_online:
         shutdown_at = cur_time + secs
-      else:
-        if secs > 0 and cur_time >= shutdown_at:
-          os.system('LD_LIBRARY_PATH="" svc power shutdown')
+
+      last_enabled = enabled
+      last_secs = secs
+      last_ts = cur_time
+
+    if enabled and not started and not usb_online and secs > 0 and cur_time >= shutdown_at:
+      os.system('LD_LIBRARY_PATH="" svc power shutdown')
     time.sleep(10)
 
 if __name__ == "__main__":
