@@ -204,6 +204,7 @@ def thermald_thread():
 
   ip_addr = '255.255.255.255'
   dragon_charging_ctrl = False
+  dragon_charging_ctrl_prev = False
   dragon_to_discharge = 70
   dragon_to_charge = 60
 
@@ -440,17 +441,18 @@ def thermald_thread():
         dp_last_modified = modified
       ts_last_update_vars = ts
 
-    # we update charging status once every min
-    if ts_last_charging_ctrl is None or ts - ts_last_charging_ctrl >= 60.:
-      if dragon_charging_ctrl:
+    if dragon_charging_ctrl != dragon_charging_ctrl_prev:
+      set_battery_charging(True)
+
+    if dragon_charging_ctrl:
+      if ts_last_charging_ctrl is None or ts - ts_last_charging_ctrl >= 60.:
         if msg.thermal.batteryPercent >= dragon_to_discharge and get_battery_charging():
           set_battery_charging(False)
-        if msg.thermal.batteryPercent <= dragon_to_charge and not get_battery_charging():
+        elif msg.thermal.batteryPercent <= dragon_to_charge and not get_battery_charging():
           set_battery_charging(True)
-      else:
-        if not get_battery_charging():
-          set_battery_charging(True)
-      ts_last_charging_ctrl = ts
+        ts_last_charging_ctrl = ts
+
+      dragon_charging_ctrl_prev = dragon_charging_ctrl
 
     # report to server once per minute
     if (count % int(60. / DT_TRML)) == 0:
