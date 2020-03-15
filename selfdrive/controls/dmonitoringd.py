@@ -59,19 +59,16 @@ def dmonitoringd_thread(sm=None, pm=None):
         # load driver monitor val only when safety is on
         if dp_enable_driver_safety_check:
           dp_enable_driver_monitoring = False if params.get("DragonEnableDriverMonitoring", encoding='utf8') == "0" else True
-        # load steering monitor timer val only when driver monitor is on
-        if dp_enable_driver_safety_check:
           try:
             dp_awareness_time = int(params.get("DragonSteeringMonitorTimer", encoding='utf8'))
           except TypeError:
             dp_awareness_time = 0.
           driver_status.awareness_time = 86400 if dp_awareness_time <= 0. else dp_awareness_time * 60.
+        else:
+          dp_enable_driver_monitoring = False
+          driver_status.awareness_time = 86400
         dp_last_modified = modified
       last_ts = cur_time
-
-    if not dp_enable_driver_safety_check:
-      dp_enable_driver_monitoring = False
-      driver_status.awareness_time = 86400
 
     # reset all awareness val and set to rhd region, this will enforce steering monitor.
     if not dp_enable_driver_monitoring:

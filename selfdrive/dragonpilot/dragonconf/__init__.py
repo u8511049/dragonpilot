@@ -69,7 +69,7 @@ default_conf = {
   'DragonBTG': 0,
   'DragonBootHotspot': 0,
   'DragonAccelProfile': '0',
-  'DragonLastModified': str(floor(time.time()))
+  'DragonLastModified': str(floor(time.time())),
 }
 
 deprecated_conf = {

@@ -296,7 +296,7 @@ struct ThermalData {
   memUsedPercent @19 :Int8;
   cpuPerc @20 :Int8;
 
-  ipAddr @24 :Text; # dragonpilot
+  ipAddr @25 :Text; # dragonpilot
 
   enum ThermalStatus {
     green @0;   # all processes run

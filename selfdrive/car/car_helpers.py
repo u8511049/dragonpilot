@@ -181,16 +181,15 @@ def fingerprint(logcan, sendcan, has_relay):
 
     frame += 1
 
+  source = car.CarParams.FingerprintSource.can
+
   if dragon_has_cache:
     car_fingerprint = dragon_car_fingerprint
     finger = dragon_finger
     vin = dragon_vin
     car_fw = dragon_car_fw
     source = dragon_source
-
   else:
-    source = car.CarParams.FingerprintSource.can
-
     # If FW query returns exactly 1 candidate, use it
     if len(fw_candidates) == 1:
       car_fingerprint = list(fw_candidates)[0]
