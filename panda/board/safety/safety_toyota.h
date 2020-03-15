@@ -112,7 +112,7 @@ static int toyota_rx_hook(CAN_FIFOMailBox_TypeDef *to_push) {
       int byte = (addr == 0x224) ? 0 : 4;
       bool brake_pressed = ((GET_BYTE(to_push, byte) >> 5) & 1) != 0;
       if (brake_pressed && (!brake_pressed_prev || toyota_moving)) {
-        controls_allowed = 0;
+        controls_allowed = 1;
       }
       brake_pressed_prev = brake_pressed;
     }

@@ -62,7 +62,6 @@ class PathPlanner():
 
     # dragonpilot
     self.params = Params()
-    self.dragon_assisted_lc_enabled = False
     self.dragon_auto_lc_enabled = False
     self.dragon_auto_lc_allowed = False
     self.dragon_auto_lc_timer = None
@@ -94,8 +93,8 @@ class PathPlanner():
     if cur_time - self.last_ts >= 5.:
       modified = dp_get_last_modified()
       if self.dp_last_modified != modified:
-        self.dragon_assisted_lc_enabled = self.lane_change_enabled
-        if self.dragon_assisted_lc_enabled:
+        self.lane_change_enabled = True if self.params.get("LaneChangeEnabled", encoding='utf8') == "1" else False
+        if self.lane_change_enabled:
           self.dragon_auto_lc_enabled = True if self.params.get("DragonEnableAutoLC", encoding='utf8') == "1" else False
           # adjustable assisted lc min speed
           self.dragon_assisted_lc_min_mph = int(self.params.get("DragonAssistedLCMinMPH", encoding='utf8')) * CV.MPH_TO_MS
@@ -113,6 +112,8 @@ class PathPlanner():
             self.dragon_auto_lc_delay = int(self.params.get("DragonAutoLCDelay", encoding='utf8'))
             if self.dragon_auto_lc_delay < 0:
               self.dragon_auto_lc_delay = 0
+        else:
+          self.dragon_auto_lc_enabled = False
         self.dp_last_modified = modified
       self.last_ts = cur_time
 

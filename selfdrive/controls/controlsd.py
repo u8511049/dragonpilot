@@ -554,7 +554,10 @@ def controlsd_thread(sm=None, pm=None, can_sock=None):
       if dp_last_modified != modified:
         dragon_toyota_stock_dsu = True if params.get("DragonToyotaStockDSU", encoding='utf8') == "1" else False
         dragon_lat_control = False if params.get("DragonLatCtrl", encoding='utf8') == "0" else True
-        dragon_display_steering_limit_alert = False if params.get("DragonDisplaySteeringLimitAlert", encoding='utf8') == "0" else True
+        if dragon_lat_control:
+          dragon_display_steering_limit_alert = False if params.get("DragonDisplaySteeringLimitAlert", encoding='utf8') == "0" else True
+        else:
+          dragon_display_steering_limit_alert = False
         dragon_lead_car_moving_alert = True if params.get("DragonEnableLeadCarMovingAlert", encoding='utf8') == "1" else False
         dp_last_modified = modified
       ts_last_check = ts
@@ -609,9 +612,9 @@ def controlsd_thread(sm=None, pm=None, can_sock=None):
       else:
         dragon_stopped_has_lead_count = 0
 
-      # when we detect lead car over a sec and the lead car is started moving, we are ready to send alerts
+      # when we detect lead car over 3 secs and the lead car is started moving, we are ready to send alerts
       # once the condition is triggered, we want to keep the trigger
-      if dragon_stopped_has_lead_count >= 100:
+      if dragon_stopped_has_lead_count >= 300:
         if abs(sm['plan'].vTargetFuture) >= 0.1:
           events.append(create_event('leadCarMoving', [ET.WARNING]))
         else:

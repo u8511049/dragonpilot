@@ -17,7 +17,7 @@ from selfdrive.swaglog import cloudlog
 import cereal.messaging as messaging
 from selfdrive.loggerd.config import get_available_percent
 from selfdrive.pandad import get_expected_signature
-from selfdrive.thermald.power_monitoring import PowerMonitoring, get_battery_capacity, get_battery_status, get_battery_current, get_battery_voltage, get_usb_present
+from selfdrive.thermald.power_monitoring import PowerMonitoring, get_battery_capacity, get_battery_status, get_battery_current, get_battery_voltage, get_usb_present, set_battery_charging, get_battery_charging
 
 FW_SIGNATURE = get_expected_signature()
 
@@ -443,12 +443,13 @@ def thermald_thread():
     # we update charging status once every min
     if ts_last_charging_ctrl is None or ts - ts_last_charging_ctrl >= 60.:
       if dragon_charging_ctrl:
-        if msg.thermal.batteryPercent >= dragon_to_discharge:
-          os.system('echo "0" > /sys/class/power_supply/battery/charging_enabled')
-        if msg.thermal.batteryPercent <= dragon_to_charge:
-          os.system('echo "1" > /sys/class/power_supply/battery/charging_enabled')
+        if msg.thermal.batteryPercent >= dragon_to_discharge and get_battery_charging():
+          set_battery_charging(False)
+        if msg.thermal.batteryPercent <= dragon_to_charge and not get_battery_charging():
+          set_battery_charging(True)
       else:
-        os.system('echo "1" > /sys/class/power_supply/battery/charging_enabled')
+        if not get_battery_charging():
+          set_battery_charging(True)
       ts_last_charging_ctrl = ts
 
     # report to server once per minute

@@ -37,6 +37,7 @@ class CarController():
     self.dragon_enable_steering_on_signal = False
     self.dragon_lat_ctrl = True
     self.dp_last_modified = None
+    self.lane_change_enabled = True
 
   def update(self, enabled, CS, frame, actuators, pcm_cancel_cmd, visual_alert, left_line, right_line):
     """ Controls thread """
@@ -45,8 +46,15 @@ class CarController():
     if frame % 500 == 0:
       modified = dp_get_last_modified()
       if self.dp_last_modified != modified:
-        self.dragon_enable_steering_on_signal = True if params.get("DragonEnableSteeringOnSignal", encoding='utf8') == "1" else False
         self.dragon_lat_ctrl = False if params.get("DragonLatCtrl", encoding='utf8') == "0" else True
+        if self.dragon_lat_ctrl:
+          self.lane_change_enabled = False if params.get("LaneChangeEnabled", encoding='utf8') == "1" else False
+          if not self.lane_change_enabled:
+            self.dragon_enable_steering_on_signal = True if params.get("DragonEnableSteeringOnSignal", encoding='utf8') == "1" else False
+          else:
+            self.dragon_enable_steering_on_signal = False
+        else:
+          self.dragon_enable_steering_on_signal = False
         self.dp_last_modified = modified
 
     P = self.params
@@ -75,7 +83,7 @@ class CarController():
       # dragonpilot
       if enabled:
         if self.dragon_enable_steering_on_signal:
-          if CS.left_blinker_on == 0 and CS.right_blinker_on == 0:
+          if not CS.out.leftBlinker and not CS.out.rightBlinker:
             self.turning_signal_timer = 0
           else:
             self.turning_signal_timer = 100

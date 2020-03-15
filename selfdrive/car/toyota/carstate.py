@@ -5,7 +5,10 @@ from selfdrive.car.interfaces import CarStateBase
 from opendbc.can.parser import CANParser
 from selfdrive.config import Conversions as CV
 from selfdrive.car.toyota.values import CAR, DBC, STEER_THRESHOLD, TSS2_CAR, NO_STOP_TIMER_CAR
-
+from common.realtime import sec_since_boot
+from common.params import Params
+from selfdrive.dragonpilot.dragonconf import dp_get_last_modified
+params = Params()
 
 class CarState(CarStateBase):
   def __init__(self, CP):
@@ -19,10 +22,23 @@ class CarState(CarStateBase):
     # On NO_DSU cars but not TSS2 cars the cp.vl["STEER_TORQUE_SENSOR"]['STEER_ANGLE']
     # is zeroed to where the steering angle is at start.
     # Need to apply an offset as soon as the steering angle measurements are both received
-    self.needs_angle_offset = CP.carFingerprint not in TSS2_CAR
+    self.needs_angle_offset = CP.carFingerprint not in TSS2_CAR or CP.carFingerprint == CAR.LEXUS_ISH
     self.angle_offset = 0.
+    # dragonpilot
+    self.dragon_toyota_stock_dsu = False
+    self.ts_last_check = 0.
+    self.last_modifed = None
 
   def update(self, cp, cp_cam):
+    # dragonpilot, don't check for param too often as it's a kernel call
+    ts = sec_since_boot()
+    if ts - self.ts_last_check >= 5.:
+      modified = dp_get_last_modified()
+      if self.last_modifed != modified:
+        self.dragon_toyota_stock_dsu = True if params.get("DragonToyotaStockDSU", encoding='utf8') == "1" else False
+        self.last_modifed = modified
+      self.ts_last_check = ts
+
     ret = car.CarState.new_message()
 
     ret.doorOpen = any([cp.vl["SEATS_DOORS"]['DOOR_OPEN_FL'], cp.vl["SEATS_DOORS"]['DOOR_OPEN_FR'],
@@ -34,8 +50,11 @@ class CarState(CarStateBase):
     if self.CP.enableGasInterceptor:
       ret.gas = (cp.vl["GAS_SENSOR"]['INTERCEPTOR_GAS'] + cp.vl["GAS_SENSOR"]['INTERCEPTOR_GAS2']) / 2.
       ret.gasPressed = ret.gas > 15
+    elif self.CP.carFingerprint in [CAR.LEXUS_ISH, CAR.LEXUS_GSH]:
+      self.pedal_gas = cp.vl["GAS_PEDAL_ALT"]['GAS_PEDAL']
+      ret.gasPressed = ret.gas > 1e-5
     else:
-      ret.gas = cp.vl["GAS_PEDAL"]['GAS_PEDAL']
+      self.pedal_gas = cp.vl["GAS_PEDAL"]['GAS_PEDAL']
       ret.gasPressed = ret.gas > 1e-5
 
     ret.wheelSpeeds.fl = cp.vl["WHEEL_SPEEDS"]['WHEEL_SPEED_FL'] * CV.KPH_TO_MS
@@ -77,11 +96,19 @@ class CarState(CarStateBase):
       ret.cruiseState.available = cp.vl["DSU_CRUISE"]['MAIN_ON'] != 0
       ret.cruiseState.speed = cp.vl["DSU_CRUISE"]['SET_SPEED'] * CV.KPH_TO_MS
       self.low_speed_lockout = False
+    elif self.CP.carFingerprint in [CAR.LEXUS_ISH, CAR.LEXUS_GSH]:
+      ret.cruiseState.available = cp.vl["PCM_CRUISE_ALT"]['MAIN_ON'] != 0
+      ret.cruiseState.speed = cp.vl["PCM_CRUISE_ALT"]['SET_SPEED'] * CV.KPH_TO_MS
+      self.low_speed_lockout = False
     else:
       ret.cruiseState.available = cp.vl["PCM_CRUISE_2"]['MAIN_ON'] != 0
       ret.cruiseState.speed = cp.vl["PCM_CRUISE_2"]['SET_SPEED'] * CV.KPH_TO_MS
       self.low_speed_lockout = cp.vl["PCM_CRUISE_2"]['LOW_SPEED_LOCKOUT'] == 2
-    self.pcm_acc_status = cp.vl["PCM_CRUISE"]['CRUISE_STATE']
+    if self.CP.carFingerprint in [CAR.LEXUS_ISH, CAR.LEXUS_GSH]:
+      # Lexus ISH does not have CRUISE_STATUS value (always 0), so we use CRUISE_ACTIVE value instead
+      self.pcm_acc_status = cp.vl["PCM_CRUISE"]['CRUISE_ACTIVE']
+    else:
+      self.pcm_acc_status = cp.vl["PCM_CRUISE"]['CRUISE_STATE']
     if self.CP.carFingerprint in NO_STOP_TIMER_CAR or self.CP.enableGasInterceptor:
       # ignore standstill in hybrid vehicles, since pcm allows to restart without
       # receiving any special command. Also if interceptor is detected
@@ -92,6 +119,8 @@ class CarState(CarStateBase):
 
     if self.CP.carFingerprint == CAR.PRIUS:
       ret.genericToggle = cp.vl["AUTOPARK_STATUS"]['STATE'] != 0
+    elif self.CP.carFingerprint in [CAR.LEXUS_ISH, CAR.LEXUS_GSH]:
+      ret.genericToggle = bool(cp.vl["LIGHT_STALK_ISH"]['AUTO_HIGH_BEAM'])
     else:
       ret.genericToggle = bool(cp.vl["LIGHT_STALK"]['AUTO_HIGH_BEAM'])
     ret.stockAeb = bool(cp_cam.vl["PRE_COLLISION"]["PRECOLLISION_ACTIVE"] and cp_cam.vl["PRE_COLLISION"]["FORCE"] < -1e-5)
@@ -100,6 +129,12 @@ class CarState(CarStateBase):
     # 2 is standby, 10 is active. TODO: check that everything else is really a faulty state
     self.steer_state = cp.vl["EPS_STATUS"]['LKA_STATE']
     self.steer_warning = cp.vl["EPS_STATUS"]['LKA_STATE'] not in [1, 5]
+
+    if self.dragon_toyota_stock_dsu and ret.genericToggle and ret.cruiseState.available:
+      enable_acc = True
+      if ret.seatbeltUnlatched or ret.doorOpen:
+        enable_acc = False
+      ret.cruiseState.enabled = enable_acc
 
     return ret
 
@@ -127,6 +162,7 @@ class CarState(CarStateBase):
       ("CRUISE_STATE", "PCM_CRUISE", 0),
       ("STEER_TORQUE_DRIVER", "STEER_TORQUE_SENSOR", 0),
       ("STEER_TORQUE_EPS", "STEER_TORQUE_SENSOR", 0),
+      ("STEER_ANGLE", "STEER_TORQUE_SENSOR", 0),
       ("TURN_SIGNALS", "STEERING_LEVERS", 3),   # 3 is no blinkers
       ("LKA_STATE", "EPS_STATUS", 0),
       ("IPAS_STATE", "EPS_STATUS", 1),
@@ -170,9 +206,6 @@ class CarState(CarStateBase):
       signals.append(("SET_SPEED", "PCM_CRUISE_2", 0))
       signals.append(("LOW_SPEED_LOCKOUT", "PCM_CRUISE_2", 0))
       checks.append(("PCM_CRUISE_2", 33))
-
-    if CP.carFingerprint in NO_DSU_CAR or CP.carFingerprint == CAR.LEXUS_ISH:
-      signals += [("STEER_ANGLE", "STEER_TORQUE_SENSOR", 0)]
 
     if CP.carFingerprint == CAR.PRIUS:
       signals += [("STATE", "AUTOPARK_STATUS", 0)]
