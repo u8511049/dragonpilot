@@ -20,25 +20,24 @@ class CarControllerParams():
 
 
 class CarController():
-  def __init__(self, car_fingerprint):
+  def __init__(self, dbc_name, CP, VM):
     self.lkas_active = False
-    self.steer_idx = 0
     self.apply_steer_last = 0
-    self.car_fingerprint = car_fingerprint
     self.es_distance_cnt = -1
     self.es_lkas_cnt = -1
     self.steer_rate_limited = False
 
     # Setup detection helper. Routes commands to
     # an appropriate CAN bus number.
-    self.params = CarControllerParams(car_fingerprint)
-    self.packer = CANPacker(DBC[car_fingerprint]['pt'])
+    self.params = CarControllerParams(CP.carFingerprint)
+    self.packer = CANPacker(DBC[CP.carFingerprint]['pt'])
 
     # dragonpilot
     self.turning_signal_timer = 0
     self.dragon_enable_steering_on_signal = False
     self.dragon_lat_ctrl = True
     self.dp_last_modified = None
+    self.lane_change_enabled = True
 
   def update(self, enabled, CS, frame, actuators, pcm_cancel_cmd, visual_alert, left_line, right_line):
     """ Controls thread """
@@ -47,8 +46,15 @@ class CarController():
     if frame % 500 == 0:
       modified = dp_get_last_modified()
       if self.dp_last_modified != modified:
-        self.dragon_enable_steering_on_signal = True if params.get("DragonEnableSteeringOnSignal", encoding='utf8') == "1" else False
         self.dragon_lat_ctrl = False if params.get("DragonLatCtrl", encoding='utf8') == "0" else True
+        if self.dragon_lat_ctrl:
+          self.lane_change_enabled = False if params.get("LaneChangeEnabled", encoding='utf8') == "1" else False
+          if not self.lane_change_enabled:
+            self.dragon_enable_steering_on_signal = True if params.get("DragonEnableSteeringOnSignal", encoding='utf8') == "1" else False
+          else:
+            self.dragon_enable_steering_on_signal = False
+        else:
+          self.dragon_enable_steering_on_signal = False
         self.dp_last_modified = modified
 
     P = self.params
@@ -66,7 +72,7 @@ class CarController():
       # limits due to driver torque
 
       new_steer = int(round(apply_steer))
-      apply_steer = apply_std_steer_torque_limits(new_steer, self.apply_steer_last, CS.steer_torque_driver, P)
+      apply_steer = apply_std_steer_torque_limits(new_steer, self.apply_steer_last, CS.out.steeringTorque, P)
       self.steer_rate_limited = new_steer != apply_steer
 
       lkas_enabled = enabled
@@ -77,7 +83,7 @@ class CarController():
       # dragonpilot
       if enabled:
         if self.dragon_enable_steering_on_signal:
-          if CS.left_blinker_on == 0 and CS.right_blinker_on == 0:
+          if not CS.out.leftBlinker and not CS.out.rightBlinker:
             self.turning_signal_timer = 0
           else:
             self.turning_signal_timer = 100
