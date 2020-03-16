@@ -544,9 +544,11 @@ def main():
   if params.get("Passive") is None:
     raise Exception("Passive must be set to continue")
 
+  reg = False if params.get("DragonEnableRegistration", encoding='utf8') == "0" else True
+
   if ANDROID:
     update_apks()
-  manager_init()
+  manager_init(reg)
   manager_prepare(spinner)
   spinner.close()
 

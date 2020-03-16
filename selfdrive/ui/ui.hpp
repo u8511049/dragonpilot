@@ -166,6 +166,7 @@ typedef struct UIScene {
   // for blinker, from kegman
   bool leftBlinker;
   bool rightBlinker;
+  bool brakeLights;
   int blinker_blinkingrate;
 } UIScene;
 

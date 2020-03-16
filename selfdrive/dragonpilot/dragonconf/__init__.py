@@ -70,6 +70,7 @@ default_conf = {
   'DragonBootHotspot': 0,
   'DragonAccelProfile': '0',
   'DragonLastModified': str(floor(time.time())),
+  'DragonEnableRegistration': '1',
   'DragonDynamicFollow': '0', # traffic = -1, stock = 0, roadtrip = 1
 }
 

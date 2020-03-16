@@ -172,6 +172,7 @@ keys = {
   "DragonBootHotspot": [TxType.PERSISTENT],
   "DragonAccelProfile": [TxType.PERSISTENT],
   "DragonLastModified": [TxType.PERSISTENT],
+  "DragonEnableRegistration": [TxType.PERSISTENT],
   "DragonDynamicFollow": [TxType.PERSISTENT],
 }
 

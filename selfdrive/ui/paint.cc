@@ -671,7 +671,7 @@ static void ui_draw_vision_speed(UIState *s) {
 
     nvgFontFace(s->vg, "sans-regular");
     nvgFontSize(s->vg, 36*2.5);
-    nvgFillColor(s->vg, nvgRGBA(255, 255, 255, 200));
+    nvgFillColor(s->vg, s->scene.brakeLights? COLOR_YELLOW : nvgRGBA(255, 255, 255, 200));
 
     if (s->is_metric) {
       nvgText(s->vg, viz_speed_x+viz_speed_w/2, 320, "kph", NULL);
@@ -838,11 +838,19 @@ static void ui_draw_infobar(UIState *s) {
 
   char infobar[100];
   // create time string
-  char date_time[20];
+  char date_time[17];
   time_t rawtime = time(NULL);
   struct tm timeinfo;
   localtime_r(&rawtime, &timeinfo);
-  strftime(date_time, sizeof(date_time),"%F %T", &timeinfo);
+  strftime(date_time, sizeof(date_time),"%D %T", &timeinfo);
+
+  // Create temp string
+  char temp[6];
+  snprintf(temp, sizeof(temp), "%02d°C", s->scene.paTemp);
+
+  // create battery percentage string
+  char battery[4];
+  snprintf(battery, sizeof(battery), "%02d%%", s->scene.batteryPercent);
 
   if (s->dragon_ui_dev_mini) {
     char rel_steer[9];
@@ -865,8 +873,10 @@ static void ui_draw_infobar(UIState *s) {
     snprintf(
       infobar,
       sizeof(infobar),
-      "%s /REL: %s /DES: %s /DIS: %s",
+      "%s /TMP: %s /BAT: %s /REL: %s /DES: %s /DIS: %s",
       date_time,
+      temp,
+      battery,
       rel_steer,
       des_steer,
       lead_dist
@@ -875,17 +885,19 @@ static void ui_draw_infobar(UIState *s) {
     snprintf(
       infobar,
       sizeof(infobar),
-      "%s",
-      date_time
+      "%s /TMP: %s /BAT: %s",
+      date_time,
+      temp,
+      battery
     );
   }
 
   nvgBeginPath(s->vg);
-  nvgRoundedRect(s->vg, rect_x, rect_y, rect_w, rect_h, 15);
+  nvgRect(s->vg, rect_x, rect_y, rect_w, rect_h);
   nvgFillColor(s->vg, nvgRGBA(0, 0, 0, 180));
   nvgFill(s->vg);
 
-  nvgFontSize(s->vg, hasSidebar? 43:50);
+  nvgFontSize(s->vg, hasSidebar? 35:42);
   nvgFontFace(s->vg, "courbd");
   nvgFillColor(s->vg, nvgRGBA(255, 255, 255, 180));
   nvgTextAlign(s->vg, NVG_ALIGN_CENTER);

@@ -20,10 +20,6 @@ class App():
   TYPE_FULLSCREEN = 3
   TYPE_UTIL = 4
 
-  # offroad app
-  OFFROAD = "ai.comma.plus.offroad"
-  OFFROAD_MAIN = ".MainActivity"
-
   # manual switch stats
   MANUAL_OFF = "-1"
   MANUAL_IDLE = "0"
@@ -54,7 +50,6 @@ class App():
     # read manual run param
     self.manual_ctrl_param = manual_ctrl_param
     # if it's a service app, we do not kill if device is too hot
-    # if it's a full screen app, we need to do extra process on offroad
     self.app_type = app_type
     # app permissions
     self.permissions = permissions
@@ -113,10 +108,6 @@ class App():
 
       # only run app if it's not running
       if force or not self.is_running:
-        # if it's a full screen app, we need to stop frame and offroad to get keyboard access
-        if self.app_type == self.TYPE_FULLSCREEN:
-          self.system("am start -n %s/%s" % (self.OFFROAD, self.OFFROAD_MAIN))
-
         self.system("pm enable %s" % self.app)
 
         if self.app_type == self.TYPE_GPS_SERVICE:
@@ -138,11 +129,6 @@ class App():
 
       # only kill app if it's running
       if force or self.is_running:
-        # if it's a full screen app, we need to restart offroad
-        if self.app_type == self.TYPE_FULLSCREEN:
-          self.system("pm disable %s" % self.OFFROAD)
-          self.system("pm enable %s" % self.OFFROAD)
-
         if self.app_type == self.TYPE_GPS_SERVICE:
           self.appops_set(self.app, "android:mock_location", "deny")
 
