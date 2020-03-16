@@ -70,6 +70,7 @@ default_conf = {
   'DragonBootHotspot': 0,
   'DragonAccelProfile': '0',
   'DragonLastModified': str(floor(time.time())),
+  'DragonEnableRegistration': '1',
 }
 
 deprecated_conf = {
