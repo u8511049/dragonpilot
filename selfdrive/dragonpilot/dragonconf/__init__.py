@@ -71,7 +71,7 @@ default_conf = {
   'DragonAccelProfile': '0',
   'DragonLastModified': str(floor(time.time())),
   'DragonEnableRegistration': '1',
-  'DragonDynamicFollow': '0', # traffic = -1, stock = 0, roadtrip = 1
+  'DragonDynamicFollow': '-2', # OFF = -2, LONG = -1, NORMAL = 0, SHORT = 1
 }
 
 deprecated_conf = {
