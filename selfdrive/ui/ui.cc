@@ -983,13 +983,18 @@ int main(int argc, char* argv[]) {
     s->scene.ui_viz_rw = hasSidebar ? box_w : (box_w + sbr_w - (bdr_s * 2));
     s->scene.ui_viz_ro = hasSidebar ? -(sbr_w - 6 * bdr_s) : 0;
 
-    // poll for touch events
-    int touch_x = -1, touch_y = -1;
-    int touched = touch_poll(&touch, &touch_x, &touch_y, 0);
-    if (touched == 1) {
-      set_awake(s, true);
-      handle_sidebar_touch(s, touch_x, touch_y);
-      handle_vision_touch(s, touch_x, touch_y);
+    if (s->vision_connected && s->dragon_waze_mode) {
+      // always collapsed sidebar when vision is connect and in waze mode
+      s->scene.uilayout_sidebarcollapsed = true;
+    } else {
+      // poll for touch events
+      int touch_x = -1, touch_y = -1;
+      int touched = touch_poll(&touch, &touch_x, &touch_y, 0);
+      if (touched == 1) {
+        set_awake(s, true);
+        handle_sidebar_touch(s, touch_x, touch_y);
+        handle_vision_touch(s, touch_x, touch_y);
+      }
     }
 
     if (!s->vision_connected) {
