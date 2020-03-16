@@ -128,8 +128,10 @@ class CarInterfaceBase():
       events.append(create_event('wrongCarMode', [ET.NO_ENTRY, ET.USER_DISABLE]))
     if cs_out.espDisabled:
       events.append(create_event('espDisabled', [ET.NO_ENTRY, ET.SOFT_DISABLE]))
-    if cs_out.gasPressed:
-      events.append(create_event('pedalPressed', [ET.PRE_ENABLE]))
+    if not self.dragon_toyota_stock_dsu:
+      if not self.dragon_allow_gas:
+        if cs_out.gasPressed:
+          events.append(create_event('pedalPressed', [ET.PRE_ENABLE]))
 
     # TODO: move this stuff to the capnp strut
     if not self.dragon_lat_ctrl:
