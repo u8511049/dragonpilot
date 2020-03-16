@@ -671,7 +671,7 @@ static void ui_draw_vision_speed(UIState *s) {
 
     nvgFontFace(s->vg, "sans-regular");
     nvgFontSize(s->vg, 36*2.5);
-    nvgFillColor(s->vg, nvgRGBA(255, 255, 255, 200));
+    nvgFillColor(s->vg, s->scene.brakeLights? COLOR_YELLOW : nvgRGBA(255, 255, 255, 200));
 
     if (s->is_metric) {
       nvgText(s->vg, viz_speed_x+viz_speed_w/2, 320, "kph", NULL);

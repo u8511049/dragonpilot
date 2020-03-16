@@ -548,6 +548,7 @@ void handle_message(UIState *s, Message * msg) {
     }
     s->scene.leftBlinker = datad.leftBlinker;
     s->scene.rightBlinker = datad.rightBlinker;
+    s->scene.brakeLights = datad.brakeLights;
   }
   capn_free(&ctx);
 }
