@@ -108,9 +108,23 @@ static void draw_chevron(UIState *s, float x_in, float y_in, float sz,
   nvgRestore(s->vg);
 }
 
-static void ui_draw_lane_line(UIState *s, const model_path_vertices_data *pvd, NVGcolor color) {
-  const UIScene *scene = &s->scene;
+static void draw_lead(UIState *s, float d_rel, float v_rel, float y_rel){
+    // Draw lead car indicator
+    float fillAlpha = 0;
+    float speedBuff = 10.;
+    float leadBuff = 40.;
+    if (d_rel < leadBuff) {
+      fillAlpha = 255*(1.0-(d_rel/leadBuff));
+      if (v_rel < 0) {
+        fillAlpha += 255*(-1*(v_rel/speedBuff));
+      }
+      fillAlpha = (int)(fmin(fillAlpha, 255));
+    }
+    draw_chevron(s, d_rel, y_rel, 25,
+                 nvgRGBA(201, 34, 49, fillAlpha), nvgRGBA(218, 202, 37, 255));
+}
 
+static void ui_draw_lane_line(UIState *s, const model_path_vertices_data *pvd, NVGcolor color) {
   nvgSave(s->vg);
   nvgTranslate(s->vg, 240.0f, 0.0); // rgb-box space
   nvgTranslate(s->vg, -1440.0f / 2, -1080.0f / 2); // zoom 2x
@@ -204,7 +218,7 @@ static void update_all_track_data(UIState *s) {
 
 
 static void ui_draw_track(UIState *s, bool is_mpc, track_vertices_data *pvd) {
-const UIScene *scene = &s->scene;
+  const UIScene *scene = &s->scene;
   const PathData path = scene->model.path;
   const float *mpc_x_coords = &scene->mpc_x[0];
   const float *mpc_y_coords = &scene->mpc_y[0];
@@ -416,20 +430,13 @@ static void ui_draw_world(UIState *s) {
   // Draw lane edges and vision/mpc tracks
   ui_draw_vision_lanes(s);
 
-  if (s->dragon_ui_lead && scene->lead_status) {
-    // Draw lead car indicator
-    float fillAlpha = 0;
-    float speedBuff = 10.;
-    float leadBuff = 40.;
-    if (scene->lead_d_rel < leadBuff) {
-      fillAlpha = 255*(1.0-(scene->lead_d_rel/leadBuff));
-      if (scene->lead_v_rel < 0) {
-        fillAlpha += 255*(-1*(scene->lead_v_rel/speedBuff));
-      }
-      fillAlpha = (int)(fmin(fillAlpha, 255));
+  if (s->dragon_ui_lead) {
+    if (scene->lead_status) {
+      draw_lead(s, scene->lead_d_rel, scene->lead_v_rel, scene->lead_y_rel);
     }
-    draw_chevron(s, scene->lead_d_rel+2.7, scene->lead_y_rel, 25,
-                  nvgRGBA(201, 34, 49, fillAlpha), nvgRGBA(218, 202, 37, 255));
+    if ((scene->lead_status2) && (fabs(scene->lead_d_rel - scene->lead_d_rel2) > 3.0)) {
+      draw_lead(s, scene->lead_d_rel2, scene->lead_v_rel2, scene->lead_y_rel2);
+    }
   }
 }
 
@@ -659,7 +666,7 @@ static void ui_draw_vision_speed(UIState *s) {
     }
     nvgFontFace(s->vg, "sans-bold");
     nvgFontSize(s->vg, 96*2.5);
-    nvgFillColor(s->vg, nvgRGBA(255, 255, 255, 255));
+    nvgFillColor(s->vg, s->scene.brakeLights? COLOR_RED : COLOR_WHITE);
     nvgText(s->vg, viz_speed_x+viz_speed_w/2, 240, speed_str, NULL);
 
     nvgFontFace(s->vg, "sans-regular");
@@ -831,11 +838,19 @@ static void ui_draw_infobar(UIState *s) {
 
   char infobar[100];
   // create time string
-  char date_time[20];
+  char date_time[17];
   time_t rawtime = time(NULL);
   struct tm timeinfo;
   localtime_r(&rawtime, &timeinfo);
-  strftime(date_time, sizeof(date_time),"%F %T", &timeinfo);
+  strftime(date_time, sizeof(date_time),"%D %T", &timeinfo);
+
+  // Create temp string
+  char temp[6];
+  snprintf(temp, sizeof(temp), "%02d°C", s->scene.paTemp);
+
+  // create battery percentage string
+  char battery[4];
+  snprintf(battery, sizeof(battery), "%02d%%", s->scene.batteryPercent);
 
   if (s->dragon_ui_dev_mini) {
     char rel_steer[9];
@@ -858,8 +873,10 @@ static void ui_draw_infobar(UIState *s) {
     snprintf(
       infobar,
       sizeof(infobar),
-      "%s /REL: %s /DES: %s /DIS: %s",
+      "%s /TMP: %s /BAT: %s /REL: %s /DES: %s /DIS: %s",
       date_time,
+      temp,
+      battery,
       rel_steer,
       des_steer,
       lead_dist
@@ -868,17 +885,19 @@ static void ui_draw_infobar(UIState *s) {
     snprintf(
       infobar,
       sizeof(infobar),
-      "%s",
-      date_time
+      "%s /TMP: %s /BAT: %s",
+      date_time,
+      temp,
+      battery
     );
   }
 
   nvgBeginPath(s->vg);
-  nvgRoundedRect(s->vg, rect_x, rect_y, rect_w, rect_h, 15);
+  nvgRect(s->vg, rect_x, rect_y, rect_w, rect_h);
   nvgFillColor(s->vg, nvgRGBA(0, 0, 0, 180));
   nvgFill(s->vg);
 
-  nvgFontSize(s->vg, hasSidebar? 43:50);
+  nvgFontSize(s->vg, hasSidebar? 35:42);
   nvgFontFace(s->vg, "courbd");
   nvgFillColor(s->vg, nvgRGBA(255, 255, 255, 180));
   nvgTextAlign(s->vg, NVG_ALIGN_CENTER);
@@ -1230,6 +1249,7 @@ static void ui_draw_blank(UIState *s) {
 }
 
 void ui_draw(UIState *s) {
+  ui_draw_sidebar(s);
   if (s->vision_connected && s->active_app == cereal_UiLayoutState_App_home && s->status != STATUS_STOPPED) {
     ui_draw_vision(s);
   } else {
@@ -1337,6 +1357,25 @@ void ui_nvg_init(UIState *s) {
 
   assert(s->img_map >= 0);
   s->img_map = nvgCreateImage(s->vg, "../assets/img_map.png", 1);
+
+  assert(s->img_button_settings >= 0);
+  s->img_button_settings = nvgCreateImage(s->vg, "../assets/images/button_settings.png", 1);
+
+  assert(s->img_button_home >= 0);
+  s->img_button_home = nvgCreateImage(s->vg, "../assets/images/button_home.png", 1);
+
+  assert(s->img_battery >= 0);
+  s->img_battery = nvgCreateImage(s->vg, "../assets/images/battery.png", 1);
+
+  assert(s->img_battery_charging >= 0);
+  s->img_battery_charging = nvgCreateImage(s->vg, "../assets/images/battery_charging.png", 1);
+
+  for(int i=0;i<=5;++i) {
+    assert(s->img_network[i] >= 0);
+    char network_asset[32];
+    snprintf(network_asset, sizeof(network_asset), "../assets/images/network_%d.png", i);
+    s->img_network[i] = nvgCreateImage(s->vg, network_asset, 1);
+  }
 
   // init gl
   s->frame_program = load_program(frame_vertex_shader, frame_fragment_shader);
