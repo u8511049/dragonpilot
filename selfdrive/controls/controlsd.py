@@ -71,6 +71,8 @@ def events_to_bytes(events):
   for e in events:
     if isinstance(e, capnp.lib.capnp._DynamicStructReader):
       e = e.as_builder()
+    if not e.is_root:
+      e = e.copy()
     ret.append(e.to_bytes())
   return ret
 
@@ -361,8 +363,7 @@ def data_send(sm, pm, CS, CI, CP, VM, state, events, actuators, v_cruise_kph, rk
   force_decel = sm['dMonitoringState'].awarenessStatus < 0.
 
   # controlsState
-  dat = messaging.new_message()
-  dat.init('controlsState')
+  dat = messaging.new_message('controlsState')
   dat.valid = CS.canValid
   dat.controlsState = {
     "alertText1": AM.alert_text_1,
@@ -414,8 +415,7 @@ def data_send(sm, pm, CS, CI, CP, VM, state, events, actuators, v_cruise_kph, rk
   pm.send('controlsState', dat)
 
   # carState
-  cs_send = messaging.new_message()
-  cs_send.init('carState')
+  cs_send = messaging.new_message('carState')
   cs_send.valid = CS.canValid
   cs_send.carState = CS
   cs_send.carState.events = events
@@ -424,21 +424,18 @@ def data_send(sm, pm, CS, CI, CP, VM, state, events, actuators, v_cruise_kph, rk
   # carEvents - logged every second or on change
   events_bytes = events_to_bytes(events)
   if (sm.frame % int(1. / DT_CTRL) == 0) or (events_bytes != events_prev):
-    ce_send = messaging.new_message()
-    ce_send.init('carEvents', len(events))
+    ce_send = messaging.new_message('carEvents', len(events))
     ce_send.carEvents = events
     pm.send('carEvents', ce_send)
 
   # carParams - logged every 50 seconds (> 1 per segment)
   if (sm.frame % int(50. / DT_CTRL) == 0):
-    cp_send = messaging.new_message()
-    cp_send.init('carParams')
+    cp_send = messaging.new_message('carParams')
     cp_send.carParams = CP
     pm.send('carParams', cp_send)
 
   # carControl
-  cc_send = messaging.new_message()
-  cc_send.init('carControl')
+  cc_send = messaging.new_message('carControl')
   cc_send.valid = CS.canValid
   cc_send.carControl = CC
   pm.send('carControl', cc_send)
@@ -557,7 +554,10 @@ def controlsd_thread(sm=None, pm=None, can_sock=None):
       if dp_last_modified != modified:
         dragon_toyota_stock_dsu = True if params.get("DragonToyotaStockDSU", encoding='utf8') == "1" else False
         dragon_lat_control = False if params.get("DragonLatCtrl", encoding='utf8') == "0" else True
-        dragon_display_steering_limit_alert = False if params.get("DragonDisplaySteeringLimitAlert", encoding='utf8') == "0" else True
+        if dragon_lat_control:
+          dragon_display_steering_limit_alert = False if params.get("DragonDisplaySteeringLimitAlert", encoding='utf8') == "0" else True
+        else:
+          dragon_display_steering_limit_alert = False
         dragon_lead_car_moving_alert = True if params.get("DragonEnableLeadCarMovingAlert", encoding='utf8') == "1" else False
         dp_last_modified = modified
       ts_last_check = ts
@@ -612,9 +612,9 @@ def controlsd_thread(sm=None, pm=None, can_sock=None):
       else:
         dragon_stopped_has_lead_count = 0
 
-      # when we detect lead car over a sec and the lead car is started moving, we are ready to send alerts
+      # when we detect lead car over 3 secs and the lead car is started moving, we are ready to send alerts
       # once the condition is triggered, we want to keep the trigger
-      if dragon_stopped_has_lead_count >= 100:
+      if dragon_stopped_has_lead_count >= 300:
         if abs(sm['plan'].vTargetFuture) >= 0.1:
           events.append(create_event('leadCarMoving', [ET.WARNING]))
         else:

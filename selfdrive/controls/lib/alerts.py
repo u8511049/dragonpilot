@@ -5,7 +5,7 @@ from cereal import car, log
 # Priority
 class Priority:
   LOWEST = 0
-  LOW_LOWEST = 1
+  LOWER = 1
   LOW = 2
   MID = 3
   HIGH = 4
@@ -171,28 +171,28 @@ ALERTS = [
       "隨時準備好接管",
       "請您將手放在方向盤上並持續注意路況",
       AlertStatus.normal, AlertSize.mid,
-      Priority.LOW_LOWEST, VisualAlert.none, AudibleAlert.none, 0., 0., 15.),
+      Priority.LOWER, VisualAlert.none, AudibleAlert.none, 0., 0., 15.),
 
   Alert(
       "startupMaster",
       "WARNING: This branch is not tested",
       "Always keep hands on wheel and eyes on road",
       AlertStatus.userPrompt, AlertSize.mid,
-      Priority.LOW_LOWEST, VisualAlert.none, AudibleAlert.none, 0., 0., 15.),
+      Priority.LOWER, VisualAlert.none, AudibleAlert.none, 0., 0., 15.),
 
   Alert(
       "startupNoControl",
       "行車記錄模式",
       "請您將手放在方向盤上並持續注意路況",
       AlertStatus.normal, AlertSize.mid,
-      Priority.LOW_LOWEST, VisualAlert.none, AudibleAlert.none, 0., 0., 15.),
+      Priority.LOWER, VisualAlert.none, AudibleAlert.none, 0., 0., 15.),
 
   Alert(
       "startupNoCar",
       "行車記錄模式 (尚未支援車種)",
       "請您將手放在方向盤上並持續注意路況",
       AlertStatus.normal, AlertSize.mid,
-      Priority.LOW_LOWEST, VisualAlert.none, AudibleAlert.none, 0., 0., 15.),
+      Priority.LOWER, VisualAlert.none, AudibleAlert.none, 0., 0., 15.),
 
   Alert(
       "ethicalDilemma",
@@ -695,21 +695,21 @@ ALERTS = [
       "LKAS 錯誤：請重新發動車子",
       "",
       AlertStatus.normal, AlertSize.small,
-      Priority.LOW_LOWEST, VisualAlert.none, AudibleAlert.none, 0., 0., .2),
+      Priority.LOWER, VisualAlert.none, AudibleAlert.none, 0., 0., .2),
 
   Alert(
       "brakeUnavailablePermanent",
       "巡航系統錯誤：請重新發動車子",
       "",
       AlertStatus.normal, AlertSize.small,
-      Priority.LOW_LOWEST, VisualAlert.none, AudibleAlert.none, 0., 0., .2),
+      Priority.LOWER, VisualAlert.none, AudibleAlert.none, 0., 0., .2),
 
   Alert(
       "lowSpeedLockoutPermanent",
       "巡航系統錯誤：請重新發動車子",
       "",
       AlertStatus.normal, AlertSize.small,
-      Priority.LOW_LOWEST, VisualAlert.none, AudibleAlert.none, 0., 0., .2),
+      Priority.LOWER, VisualAlert.none, AudibleAlert.none, 0., 0., .2),
 
   Alert(
       "calibrationIncompletePermanent",
@@ -723,14 +723,14 @@ ALERTS = [
       "未支援的 Giraffe 設置",
       "請查閱 comma.ai/tg",
       AlertStatus.normal, AlertSize.mid,
-      Priority.LOW_LOWEST, VisualAlert.none, AudibleAlert.none, 0., 0., .2),
+      Priority.LOWER, VisualAlert.none, AudibleAlert.none, 0., 0., .2),
 
   Alert(
       "internetConnectivityNeededPermanent",
       "請連接網路",
       "需檢查更新後才能啟用",
       AlertStatus.normal, AlertSize.mid,
-      Priority.LOW_LOWEST, VisualAlert.none, AudibleAlert.none, 0., 0., .2),
+      Priority.LOWER, VisualAlert.none, AudibleAlert.none, 0., 0., .2),
 
   Alert(
       "communityFeatureDisallowedPermanent",
@@ -744,28 +744,28 @@ ALERTS = [
       "沒有收到任何來自 EON 傳感器的資料",
       "請重啟您的裝置",
       AlertStatus.normal, AlertSize.mid,
-      Priority.LOW_LOWEST, VisualAlert.none, AudibleAlert.none, 0., 0., .2),
+      Priority.LOWER, VisualAlert.none, AudibleAlert.none, 0., 0., .2),
 
   Alert(
       "soundsUnavailablePermanent",
       "找不到音效裝置",
       "請重啟您的裝置",
       AlertStatus.normal, AlertSize.mid,
-      Priority.LOW_LOWEST, VisualAlert.none, AudibleAlert.none, 0., 0., .2),
+      Priority.LOWER, VisualAlert.none, AudibleAlert.none, 0., 0., .2),
 
   Alert(
       "lowMemoryPermanent",
       "記憶體嚴重不足",
       "請重啟您的裝置",
       AlertStatus.normal, AlertSize.mid,
-      Priority.LOW_LOWEST, VisualAlert.none, AudibleAlert.none, 0., 0., .2),
+      Priority.LOWER, VisualAlert.none, AudibleAlert.none, 0., 0., .2),
 
   Alert(
       "carUnrecognizedPermanent",
       "行車記錄模式",
       "無法辨識您的車款",
       AlertStatus.normal, AlertSize.mid,
-      Priority.LOW_LOWEST, VisualAlert.none, AudibleAlert.none, 0., 0., .2),
+      Priority.LOWER, VisualAlert.none, AudibleAlert.none, 0., 0., .2),
 
   Alert(
       "vehicleModelInvalid",

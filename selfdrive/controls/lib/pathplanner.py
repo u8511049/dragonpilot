@@ -25,19 +25,16 @@ DESIRES = {
   LaneChangeDirection.none: {
     LaneChangeState.off: log.PathPlan.Desire.none,
     LaneChangeState.preLaneChange: log.PathPlan.Desire.none,
-    LaneChangeState.laneChangeStarting: log.PathPlan.Desire.none,
     LaneChangeState.laneChangeFinishing: log.PathPlan.Desire.none,
   },
   LaneChangeDirection.left: {
     LaneChangeState.off: log.PathPlan.Desire.none,
     LaneChangeState.preLaneChange: log.PathPlan.Desire.none,
-    LaneChangeState.laneChangeStarting: log.PathPlan.Desire.laneChangeLeft,
     LaneChangeState.laneChangeFinishing: log.PathPlan.Desire.laneChangeLeft,
   },
   LaneChangeDirection.right: {
     LaneChangeState.off: log.PathPlan.Desire.none,
     LaneChangeState.preLaneChange: log.PathPlan.Desire.none,
-    LaneChangeState.laneChangeStarting: log.PathPlan.Desire.laneChangeRight,
     LaneChangeState.laneChangeFinishing: log.PathPlan.Desire.laneChangeRight,
   },
 }
@@ -65,7 +62,6 @@ class PathPlanner():
 
     # dragonpilot
     self.params = Params()
-    self.dragon_assisted_lc_enabled = False
     self.dragon_auto_lc_enabled = False
     self.dragon_auto_lc_allowed = False
     self.dragon_auto_lc_timer = None
@@ -97,8 +93,8 @@ class PathPlanner():
     if cur_time - self.last_ts >= 5.:
       modified = dp_get_last_modified()
       if self.dp_last_modified != modified:
-        self.dragon_assisted_lc_enabled = self.lane_change_enabled
-        if self.dragon_assisted_lc_enabled:
+        self.lane_change_enabled = True if self.params.get("LaneChangeEnabled", encoding='utf8') == "1" else False
+        if self.lane_change_enabled:
           self.dragon_auto_lc_enabled = True if self.params.get("DragonEnableAutoLC", encoding='utf8') == "1" else False
           # adjustable assisted lc min speed
           self.dragon_assisted_lc_min_mph = int(self.params.get("DragonAssistedLCMinMPH", encoding='utf8')) * CV.MPH_TO_MS
@@ -116,6 +112,8 @@ class PathPlanner():
             self.dragon_auto_lc_delay = int(self.params.get("DragonAutoLCDelay", encoding='utf8'))
             if self.dragon_auto_lc_delay < 0:
               self.dragon_auto_lc_delay = 0
+        else:
+          self.dragon_auto_lc_enabled = False
         self.dp_last_modified = modified
       self.last_ts = cur_time
 
@@ -182,14 +180,10 @@ class PathPlanner():
         if not one_blinker or below_lane_change_speed:
           self.lane_change_state = LaneChangeState.off
         elif torque_applied:
-          self.lane_change_state = LaneChangeState.laneChangeStarting
-
-      # starting
-      elif self.lane_change_state == LaneChangeState.laneChangeStarting and lane_change_prob > 0.5:
-        self.lane_change_state = LaneChangeState.laneChangeFinishing
+          self.lane_change_state = LaneChangeState.laneChangeFinishing
 
       # finishing
-      elif self.lane_change_state == LaneChangeState.laneChangeFinishing and lane_change_prob < 0.2:
+      elif self.lane_change_state == LaneChangeState.laneChangeFinishing and lane_change_prob < 0.5:
         if one_blinker:
           self.lane_change_state = LaneChangeState.preLaneChange
         else:
@@ -254,8 +248,7 @@ class PathPlanner():
       self.solution_invalid_cnt = 0
     plan_solution_valid = self.solution_invalid_cnt < 2
 
-    plan_send = messaging.new_message()
-    plan_send.init('pathPlan')
+    plan_send = messaging.new_message('pathPlan')
     plan_send.valid = sm.all_alive_and_valid(service_list=['carState', 'controlsState', 'liveParameters', 'model'])
     plan_send.pathPlan.laneWidth = float(self.LP.lane_width)
     plan_send.pathPlan.dPoly = [float(x) for x in self.LP.d_poly]
@@ -280,8 +273,7 @@ class PathPlanner():
     pm.send('pathPlan', plan_send)
 
     if LOG_MPC:
-      dat = messaging.new_message()
-      dat.init('liveMpc')
+      dat = messaging.new_message('liveMpc')
       dat.liveMpc.x = list(self.mpc_solution[0].x)
       dat.liveMpc.y = list(self.mpc_solution[0].y)
       dat.liveMpc.psi = list(self.mpc_solution[0].psi)

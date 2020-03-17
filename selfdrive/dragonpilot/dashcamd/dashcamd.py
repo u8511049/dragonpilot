@@ -56,10 +56,12 @@ def main(gctx=None):
               break
       except os.error as e:
         pass
-      time_diff = int(time.time()-start_time)
+      time_diff = time.time()-start_time
       # we start the process 1 second before screenrecord ended
       # to make sure there are no missing footage
-      time.sleep(duration-1-time_diff)
+      sleep_time = duration-1-time_diff
+      if sleep_time >= 0.:
+        time.sleep(sleep_time)
     else:
       time.sleep(5)
 
