@@ -188,7 +188,7 @@ static void ui_draw_sidebar_storage_metric(UIState *s, bool hasSidebar) {
 
   snprintf(storage_value_str, sizeof(storage_value_str), "%d", (int)storage_pct);
   snprintf(storage_value_unit, sizeof(storage_value_unit), "%s", "%");
-  snprintf(storage_label_str, sizeof(storage_label_str), "%s", "STORAGE");
+  snprintf(storage_label_str, sizeof(storage_label_str), "%s", "存儲空間");
   strcat(storage_value_str, storage_value_unit);
 
   ui_draw_sidebar_metric(s, storage_label_str, storage_value_str, storage_severity, storage_y_offset, NULL, hasSidebar);
@@ -213,7 +213,7 @@ static void ui_draw_sidebar_temp_metric(UIState *s, bool hasSidebar) {
 
   snprintf(temp_value_str, sizeof(temp_value_str), "%d", s->scene.paTemp);
   snprintf(temp_value_unit, sizeof(temp_value_unit), "%s", "°C");
-  snprintf(temp_label_str, sizeof(temp_label_str), "%s", "TEMP");
+  snprintf(temp_label_str, sizeof(temp_label_str), "%s", "溫度");
   strcat(temp_value_str, temp_value_unit);
 
   ui_draw_sidebar_metric(s, temp_label_str, temp_value_str, temp_severity, temp_y_offset, NULL, hasSidebar);
@@ -226,17 +226,17 @@ static void ui_draw_sidebar_panda_metric(UIState *s, bool hasSidebar) {
 
   if (s->scene.hwType == cereal_HealthData_HwType_unknown) {
     panda_severity = 2;
-    snprintf(panda_message_str, sizeof(panda_message_str), "%s", "NO PANDA");
+    snprintf(panda_message_str, sizeof(panda_message_str), "%s", "無 PANDA");
   } else if (s->scene.hwType == cereal_HealthData_HwType_whitePanda) {
     panda_severity = 0;
-    snprintf(panda_message_str, sizeof(panda_message_str), "%s", "PANDA\nACTIVE");
+    snprintf(panda_message_str, sizeof(panda_message_str), "%s", "PANDA\n已連接");
   } else if (
       (s->scene.hwType == cereal_HealthData_HwType_greyPanda) ||
       (s->scene.hwType == cereal_HealthData_HwType_blackPanda) ||
       (s->scene.hwType == cereal_HealthData_HwType_uno)) {
       if (s->scene.satelliteCount == -1) {
         panda_severity = 0;
-        snprintf(panda_message_str, sizeof(panda_message_str), "%s", "PANDA\nACTIVE");
+        snprintf(panda_message_str, sizeof(panda_message_str), "%s", "PANDA\n已連接");
       } else {
         if (s->scene.satelliteCount < 6) {
           panda_severity = 1;
