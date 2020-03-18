@@ -97,19 +97,30 @@ class PathPlanner():
         if self.lane_change_enabled:
           self.dragon_auto_lc_enabled = True if self.params.get("DragonEnableAutoLC", encoding='utf8') == "1" else False
           # adjustable assisted lc min speed
-          self.dragon_assisted_lc_min_mph = int(self.params.get("DragonAssistedLCMinMPH", encoding='utf8')) * CV.MPH_TO_MS
+          try:
+            self.dragon_assisted_lc_min_mph = float(self.params.get("DragonAssistedLCMinMPH", encoding='utf8'))
+          except (TypeError, ValueError):
+            self.dragon_assisted_lc_min_mph = 37
+          self.dragon_assisted_lc_min_mph *= CV.MPH_TO_MS
           if self.dragon_assisted_lc_min_mph < 0:
             self.dragon_assisted_lc_min_mph = 0
           if self.dragon_auto_lc_enabled:
             # adjustable auto lc min speed
-            self.dragon_auto_lc_min_mph = int(self.params.get("DragonAutoLCMinMPH", encoding='utf8')) * CV.MPH_TO_MS
+            try:
+              self.dragon_auto_lc_min_mph = float(self.params.get("DragonAutoLCMinMPH", encoding='utf8'))
+            except (TypeError, ValueError):
+              self.dragon_auto_lc_min_mph = 60
+            self.dragon_auto_lc_min_mph *= CV.MPH_TO_MS
             if self.dragon_auto_lc_min_mph < 0:
               self.dragon_auto_lc_min_mph = 0
             # when auto lc is smaller than assisted lc, we set assisted lc to the same speed as auto lc
             if self.dragon_auto_lc_min_mph < self.dragon_assisted_lc_min_mph:
               self.dragon_assisted_lc_min_mph = self.dragon_auto_lc_min_mph
             # adjustable auto lc delay
-            self.dragon_auto_lc_delay = int(self.params.get("DragonAutoLCDelay", encoding='utf8'))
+            try:
+              self.dragon_auto_lc_delay = float(self.params.get("DragonAutoLCDelay", encoding='utf8'))
+            except (TypeError, ValueError):
+              self.dragon_auto_lc_delay = 2.
             if self.dragon_auto_lc_delay < 0:
               self.dragon_auto_lc_delay = 0
         else:
