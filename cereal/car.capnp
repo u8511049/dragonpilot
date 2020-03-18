@@ -84,10 +84,21 @@ struct CarEvent @0x9b1657f34caf3ad3 {
     laneChange @59;
     invalidGiraffeToyota @60;
     internetConnectivityNeeded @61;
-    manualSteeringRequired @62;
-    manualSteeringRequiredBlinkersOn @63;
-    leadCarMoving @64;
-    leadCarDetected @65;
+    communityFeatureDisallowed @62;
+    lowMemory @63;
+    stockAeb @64;
+    ldw @65;
+    carUnrecognized @66;
+    radarCommIssue @67;
+    driverMonitorLowAcc @68;
+    # dragonpilot
+    manualSteeringRequired @69;
+    manualSteeringRequiredBlinkersOn @70;
+    leadCarMoving @71;
+    leadCarDetected @72;
+    preAutoLaneChangeLeft @73;
+    preAutoLaneChangeRight @74;
+    autoLaneChange @75;
   }
 }
 
@@ -121,6 +132,10 @@ struct CarState {
   steeringTorque @8 :Float32;  # TODO: standardize units
   steeringTorqueEps @27 :Float32;  # TODO: standardize units
   steeringPressed @9 :Bool;    # if the user is using the steering wheel
+  steeringRateLimited @29 :Bool;    # if the torque is limited by the rate limiter
+  stockAeb @30 :Bool;
+  stockFcw @31 :Bool;
+  espDisabled @32 :Bool;
 
   # cruise state
   cruiseState @10 :CruiseState;
@@ -144,6 +159,10 @@ struct CarState {
 
   # which packets this state came from
   canMonoTimes @12: List(UInt64);
+  
+  # blindspot sensors
+  leftBlindspot @33 :Bool; # Is there something blocking the left lane change
+  rightBlindspot @34 :Bool; # Is there something blocking the right lane change
 
   struct WheelSpeeds {
     # optional wheel speeds
@@ -173,7 +192,6 @@ struct CarState {
     eco @8;
     manumatic @9;
   }
-
 
   # send on change
   struct ButtonEvent {
@@ -318,7 +336,7 @@ struct CarParams {
   minEnableSpeed @7 :Float32;
   minSteerSpeed @8 :Float32;
   safetyModel @9 :SafetyModel;
-  safetyModelPassive @42 :SafetyModel = noOutput;
+  safetyModelPassive @42 :SafetyModel = silent;
   safetyParam @10 :Int16;
 
   steerMaxBP @11 :List(Float32);
@@ -327,7 +345,6 @@ struct CarParams {
   gasMaxV @14 :List(Float32);
   brakeMaxBP @15 :List(Float32);
   brakeMaxV @16 :List(Float32);
-
 
   # things about the car in the manual
   mass @17 :Float32;             # [kg] running weight
@@ -342,6 +359,7 @@ struct CarParams {
   tireStiffnessRear @24 :Float32;    # [N/rad] rear tire coeff of stiff
 
   longitudinalTuning @25 :LongitudinalPIDTuning;
+  lateralParams @48 :LateralParams;
   lateralTuning :union {
     pid @26 :LateralPIDTuning;
     indi @27 :LateralINDITuning;
@@ -349,6 +367,7 @@ struct CarParams {
   }
 
   steerLimitAlert @28 :Bool;
+  steerLimitTimer @47 :Float32;  # time before steerLimitAlert is issued
 
   vEgoStopping @29 :Float32; # Speed at which the car goes into stopping state
   directAccelControl @30 :Bool; # Does the car have direct accel control or just gas/brake
@@ -364,6 +383,15 @@ struct CarParams {
   isPandaBlack @39: Bool;
   dashcamOnly @41: Bool;
   transmissionType @43 :TransmissionType;
+  carFw @44 :List(CarFw);
+  radarTimeStep @45: Float32 = 0.05;  # time delta between radar updates, 20Hz is very standard
+  communityFeature @46: Bool;  # true if a community maintained feature is detected
+  fingerprintSource @49: FingerprintSource;
+
+  struct LateralParams {
+    torqueBP @0 :List(Int32);
+    torqueV @1 :List(Int32);
+  }
 
   struct LateralPIDTuning {
     kpBP @0 :List(Float32);
@@ -381,7 +409,6 @@ struct CarParams {
     deadzoneBP @4 :List(Float32);
     deadzoneV @5 :List(Float32);
   }
-
 
   struct LateralINDITuning {
     outerLoopGain @0 :Float32;
@@ -405,12 +432,12 @@ struct CarParams {
   }
 
   enum SafetyModel {
-    noOutput @0;
-    honda @1;
+    silent @0;
+    hondaNidec @1;
     toyota @2;
     elm327 @3;
     gm @4;
-    hondaBosch @5;
+    hondaBoschGiraffe @5;
     ford @6;
     cadillac @7;
     hyundai @8;
@@ -424,6 +451,10 @@ struct CarParams {
     toyotaIpas @16;
     allOutput @17;
     gmAscm @18;
+    noOutput @19;  # like silent but without silent CAN TXs
+    hondaBoschHarness @20;
+    volkswagenPq @21;
+    subaruLegacy @22;  # pre-Global platform
   }
 
   enum SteerControlType {
@@ -435,5 +466,42 @@ struct CarParams {
     unknown @0;
     automatic @1;
     manual @2;
+  }
+
+  struct CarFw {
+    ecu @0 :Ecu;
+    fwVersion @1 :Data;
+    address @2: UInt32;
+    subAddress @3: UInt8;
+  }
+
+  enum Ecu {
+    eps @0;
+    esp @1;
+    fwdRadar @2;
+    fwdCamera @3;
+    engine @4;
+    unknown @5;
+    transmission @8; # Transmission Control Module
+    srs @9; # airbag
+    gateway @10; # can gateway
+    hud @11; # heads up display
+    combinationMeter @12; # instrument cluster
+
+    # Toyota only
+    dsu @6;
+    apgs @7;
+
+    # Honda only
+    vsa @13; # Vehicle Stability Assist
+    programmedFuelInjection @14;
+    electricBrakeBooster @15;
+    shiftByWire @16;
+  }
+
+  enum FingerprintSource {
+    can @0;
+    fw @1;
+    fixed @2;
   }
 }

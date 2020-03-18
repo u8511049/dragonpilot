@@ -1,27 +1,31 @@
 {
   "Offroad_ChargeDisabled": {
-    "text": "EON charging disabled after car being off for more than 3 days. Turn ignition on to start charging again.",
+    "text": "因車輛已熄火超過 30 小時，系統將會停止為 EON 充電，再次發動車輛後 EON 會恢復充電",
     "severity": 0
   },
   "Offroad_TemperatureTooHigh": {
-    "text": "EON temperature too high. System won't start.",
+    "text": "裝置溫度過高，系統暫時無法啟用。",
     "severity": 1
   },
   "Offroad_ConnectivityNeededPrompt": {
-    "text": "Connect to internet to check for updates. openpilot won't engage in ",
+    "text": "目前 dragonpilot 無法啟用，請馬上連網檢查更新。",
     "severity": 0,
     "_comment": "Append the number of days at the end of the text"
   },
   "Offroad_ConnectivityNeeded": {
-    "text": "Connect to internet to check for updates. openpilot won't engage.",
+    "text": "請連網檢查更新。不然 dragonpilot 將無法啟用。",
     "severity": 1
   },
   "Offroad_PandaFirmwareMismatch": {
-    "text": "Unexpected panda firmware version. System won't start. Reboot your EON to reflash panda.",
+    "text": "Panda 的韌體版本出現異常，系統無法啟用。請重啟您的裝置以刷新 Panda 韌體。",
     "severity": 1
   },
   "Offroad_InvalidTime": {
-    "text": "Invalid date and time settings, system won't start. Connect to internet to set time.",
+    "text": "系統日期／時間設定錯誤，系統無法啟用。請連上網設定的時間。",
     "severity": 1
+  },
+  "Offroad_IsTakingSnapshot": {
+    "text": "相機拍攝中，完成前系統無法啟用。",
+    "severity": 0
   }
 }

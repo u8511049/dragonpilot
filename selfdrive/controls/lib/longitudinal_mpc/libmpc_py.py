@@ -1,22 +1,12 @@
 import os
-import platform
-import subprocess
 
 from cffi import FFI
+from common.ffi_wrapper import suffix
 
 mpc_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)))
 
-if platform.machine() == "x86_64":
-  try:
-    FFI().dlopen(os.path.join(mpc_dir, "libmpc1.so"))
-  except OSError:
-    # libmpc1.so is likely built for aarch64. cleaning...
-    subprocess.check_call(["make", "clean"], cwd=mpc_dir)
-
-subprocess.check_call(["make", "-j4"], cwd=mpc_dir)
-
 def _get_libmpc(mpc_id):
-    libmpc_fn = os.path.join(mpc_dir, "libmpc%d.so" % mpc_id)
+    libmpc_fn = os.path.join(mpc_dir, "libmpc%d%s" % (mpc_id, suffix()))
 
     ffi = FFI()
     ffi.cdef("""
@@ -39,8 +29,9 @@ def _get_libmpc(mpc_id):
 
     void init(double ttcCost, double distanceCost, double accelerationCost, double jerkCost);
     void init_with_simulation(double v_ego, double x_l, double v_l, double a_l, double l);
+    void change_tr(double ttcCost, double distanceCost, double accelerationCost, double jerkCost);
     int run_mpc(state_t * x0, log_t * solution,
-                double l, double a_l_0);
+                double l, double a_l_0, double TR);
     """)
 
     return (ffi, ffi.dlopen(libmpc_fn))

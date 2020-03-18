@@ -1,14 +1,17 @@
 from collections import namedtuple
+from cereal import car
 from common.realtime import DT_CTRL
 from selfdrive.controls.lib.drive_helpers import rate_limit
-from common.numpy_fast import clip
+from common.numpy_fast import clip, interp
 from selfdrive.car import create_gas_command
 from selfdrive.car.honda import hondacan
-from selfdrive.car.honda.values import AH, CruiseButtons, CAR
-from selfdrive.can.packer import CANPacker
+from selfdrive.car.honda.values import CruiseButtons, CAR, VISUAL_HUD
+from opendbc.can.packer import CANPacker
 from common.params import Params
 params = Params()
+from selfdrive.dragonpilot.dragonconf import dp_get_last_modified
 
+VisualAlert = car.CarControl.HUDControl.VisualAlert
 
 def actuator_hystereses(brake, braking, brake_steady, v_ego, car_fingerprint):
   # hyst params
@@ -30,7 +33,7 @@ def actuator_hystereses(brake, braking, brake_steady, v_ego, car_fingerprint):
     brake_steady = brake + brake_hyst_gap
   brake = brake_steady
 
-  if (car_fingerprint in (CAR.ACURA_ILX, CAR.CRV)) and brake > 0.0:
+  if (car_fingerprint in (CAR.ACURA_ILX, CAR.CRV, CAR.CRV_EU)) and brake > 0.0:
     brake += 0.15
 
   return brake, braking, brake_steady
@@ -58,25 +61,34 @@ def process_hud_alert(hud_alert):
   fcw_display = 0
   steer_required = 0
   acc_alert = 0
-  if hud_alert == AH.NONE:          # no alert
-    pass
-  elif hud_alert == AH.FCW:         # FCW
-    fcw_display = hud_alert[1]
-  elif hud_alert == AH.STEER:       # STEER
-    steer_required = hud_alert[1]
-  else:                             # any other ACC alert
-    acc_alert = hud_alert[1]
+
+  # priority is: FCW, steer required, all others
+  if hud_alert == VisualAlert.fcw:
+    fcw_display = VISUAL_HUD[hud_alert.raw]
+  elif hud_alert == VisualAlert.steerRequired:
+    steer_required = VISUAL_HUD[hud_alert.raw]
+  else:
+    acc_alert = VISUAL_HUD[hud_alert.raw]
 
   return fcw_display, steer_required, acc_alert
 
 
 HUDData = namedtuple("HUDData",
-                     ["pcm_accel", "v_cruise", "mini_car", "car", "X4",
-                      "lanes", "fcw", "acc_alert", "steer_required", "dashed_lanes"])
+                     ["pcm_accel", "v_cruise",  "car",
+                     "lanes", "fcw", "acc_alert", "steer_required", "dashed_lanes"])
 
+class CarControllerParams():
+  def __init__(self, CP):
+      self.BRAKE_MAX = 1024//4
+      self.STEER_MAX = CP.lateralParams.torqueBP[-1]
+      # mirror of list (assuming first item is zero) for interp of signed request values
+      assert(CP.lateralParams.torqueBP[0] == 0)
+      assert(CP.lateralParams.torqueBP[0] == 0)
+      self.STEER_LOOKUP_BP = [v * -1 for v in CP.lateralParams.torqueBP][1:][::-1] + list(CP.lateralParams.torqueBP)
+      self.STEER_LOOKUP_V = [v * -1 for v in CP.lateralParams.torqueV][1:][::-1] + list(CP.lateralParams.torqueV)
 
 class CarController():
-  def __init__(self, dbc_name):
+  def __init__(self, dbc_name, CP, VM):
     self.braking = False
     self.brake_steady = 0.
     self.brake_last = 0.
@@ -85,31 +97,45 @@ class CarController():
     self.packer = CANPacker(dbc_name)
     self.new_radar_config = False
 
+    self.params = CarControllerParams(CP)
+
     # dragonpilot
     self.turning_signal_timer = 0
     self.dragon_enable_steering_on_signal = False
-    # self.dragon_allow_gas = False
     self.dragon_lat_ctrl = True
+    self.dp_last_modified = None
+    self.lane_change_enabled = True
 
   def update(self, enabled, CS, frame, actuators, \
              pcm_speed, pcm_override, pcm_cancel_cmd, pcm_accel, \
              hud_v_cruise, hud_show_lanes, hud_show_car, hud_alert):
     # dragonpilot, don't check for param too often as it's a kernel call
     if frame % 500 == 0:
-      self.dragon_enable_steering_on_signal = True if params.get("DragonEnableSteeringOnSignal", encoding='utf8') == "1" else False
-      # self.dragon_allow_gas = True if params.get("DragonAllowGas", encoding='utf8') == "1" else False
-      self.dragon_lat_ctrl = False if params.get("DragonLatCtrl", encoding='utf8') == "0" else True
+      modified = dp_get_last_modified()
+      if self.dp_last_modified != modified:
+        self.dragon_lat_ctrl = False if params.get("DragonLatCtrl", encoding='utf8') == "0" else True
+        if self.dragon_lat_ctrl:
+          self.lane_change_enabled = False if params.get("LaneChangeEnabled", encoding='utf8') == "1" else False
+          if not self.lane_change_enabled:
+            self.dragon_enable_steering_on_signal = True if params.get("DragonEnableSteeringOnSignal", encoding='utf8') == "1" else False
+          else:
+            self.dragon_enable_steering_on_signal = False
+        else:
+          self.dragon_enable_steering_on_signal = False
+        self.dp_last_modified = modified
+
+    P = self.params
 
     # *** apply brake hysteresis ***
-    brake, self.braking, self.brake_steady = actuator_hystereses(actuators.brake, self.braking, self.brake_steady, CS.v_ego, CS.CP.carFingerprint)
+    brake, self.braking, self.brake_steady = actuator_hystereses(actuators.brake, self.braking, self.brake_steady, CS.out.vEgo, CS.CP.carFingerprint)
 
     # *** no output if not enabled ***
-    if not enabled and CS.pcm_acc_status:
+    if not enabled and CS.out.cruiseState.enabled:
       # send pcm acc cancel cmd if drive is disabled but pcm is still on, or if the system can't be activated
       pcm_cancel_cmd = True
 
     # *** rate limit after the enable check ***
-    self.brake_last = rate_limit(brake, self.brake_last, -2., 1./100)
+    self.brake_last = rate_limit(brake, self.brake_last, -2., DT_CTRL)
 
     # vehicle hud display, wait for one update from 10Hz 0x304 msg
     if hud_show_lanes:
@@ -127,26 +153,15 @@ class CarController():
 
     fcw_display, steer_required, acc_alert = process_hud_alert(hud_alert)
 
-    hud = HUDData(int(pcm_accel), int(round(hud_v_cruise)), 1, hud_car,
-                  0xc1, hud_lanes, fcw_display, acc_alert, steer_required, CS.lkMode)
+    hud = HUDData(int(pcm_accel), int(round(hud_v_cruise)), hud_car,
+                  hud_lanes, fcw_display, acc_alert, steer_required, CS.lkMode)
 
     # **** process the car messages ****
 
-    # *** compute control surfaces ***
-    BRAKE_MAX = 1024//4
-    if CS.CP.carFingerprint in (CAR.ACURA_ILX):
-      STEER_MAX = 0xF00
-    elif CS.CP.carFingerprint in (CAR.CRV, CAR.ACURA_RDX):
-      STEER_MAX = 0x3e8  # CR-V only uses 12-bits and requires a lower value (max value from energee)
-    elif CS.CP.carFingerprint in (CAR.ODYSSEY_CHN):
-      STEER_MAX = 0x7FFF
-    else:
-      STEER_MAX = 0x1000
-
     # steer torque is converted back to CAN reference (positive when steering right)
     apply_gas = clip(actuators.gas, 0., 1.)
-    apply_brake = int(clip(self.brake_last * BRAKE_MAX, 0, BRAKE_MAX - 1))
-    apply_steer = int(clip(-actuators.steer * STEER_MAX, -STEER_MAX, STEER_MAX))
+    apply_brake = int(clip(self.brake_last * P.BRAKE_MAX, 0, P.BRAKE_MAX - 1))
+    apply_steer = int(interp(-actuators.steer * P.STEER_MAX, P.STEER_LOOKUP_BP, P.STEER_LOOKUP_V))
 
     lkas_active = enabled and not CS.steer_not_allowed and CS.lkMode
 
@@ -154,15 +169,21 @@ class CarController():
     can_sends = []
 
     # dragonpilot
-    if enabled and (CS.left_blinker_on > 0 or CS.right_blinker_on > 0) and self.dragon_enable_steering_on_signal:
-      self.turning_signal_timer = 100
+    if enabled:
+      if self.dragon_enable_steering_on_signal:
+        if not CS.out.leftBlinker and not CS.out.rightBlinker:
+          self.turning_signal_timer = 0
+        else:
+          self.turning_signal_timer = 100
 
-    if self.turning_signal_timer > 0:
-      self.turning_signal_timer -= 1
-      lkas_active = False
+        if self.turning_signal_timer > 0:
+          self.turning_signal_timer -= 1
+          lkas_active = False
+      else:
+        self.turning_signal_timer = 0
 
-    if not self.dragon_lat_ctrl:
-      lkas_active = False
+      if not self.dragon_lat_ctrl:
+        lkas_active = False
 
     # Send steering command.
     idx = frame % 4
@@ -172,13 +193,13 @@ class CarController():
     # Send dashboard UI commands.
     if (frame % 10) == 0:
       idx = (frame//10) % 4
-      can_sends.extend(hondacan.create_ui_commands(self.packer, pcm_speed, hud, CS.CP.carFingerprint, CS.is_metric, idx, CS.CP.isPandaBlack))
+      can_sends.extend(hondacan.create_ui_commands(self.packer, pcm_speed, hud, CS.CP.carFingerprint, CS.is_metric, idx, CS.CP.isPandaBlack, CS.stock_hud))
 
     if CS.CP.radarOffCan:
       # If using stock ACC, spam cancel command to kill gas when OP disengages.
       if pcm_cancel_cmd:
         can_sends.append(hondacan.spam_buttons_command(self.packer, CruiseButtons.CANCEL, idx, CS.CP.carFingerprint, CS.CP.isPandaBlack))
-      elif CS.stopped:
+      elif CS.out.cruiseState.standstill:
         can_sends.append(hondacan.spam_buttons_command(self.packer, CruiseButtons.RES_ACCEL, idx, CS.CP.carFingerprint, CS.CP.isPandaBlack))
 
     else:
@@ -187,19 +208,8 @@ class CarController():
         idx = frame // 2
         ts = frame * DT_CTRL
         pump_on, self.last_pump_ts = brake_pump_hysteresis(apply_brake, self.apply_brake_last, self.last_pump_ts, ts)
-        # DragonAllowGas
-        # if we detect gas pedal pressed, we do not want OP to apply gas or brake
-        # gasPressed code from interface.py
-        # if not CS.CP.enableGasInterceptor:
-        #   gas_pressed = CS.pedal_gas > 0
-        # else:
-        #   gas_pressed = CS.user_gas_pressed
-        # dragon_apply_brake = apply_brake
-        # if self.dragon_allow_gas and gas_pressed:
-        #   dragon_apply_brake = 0
-        #   apply_gas = 0
         can_sends.append(hondacan.create_brake_command(self.packer, apply_brake, pump_on,
-          pcm_override, pcm_cancel_cmd, hud.fcw, idx, CS.CP.carFingerprint, CS.CP.isPandaBlack))
+          pcm_override, pcm_cancel_cmd, hud.fcw, idx, CS.CP.carFingerprint, CS.CP.isPandaBlack, CS.stock_brake))
         self.apply_brake_last = apply_brake
 
         if CS.CP.enableGasInterceptor:

@@ -22,6 +22,8 @@ file in place without messing with <params_dir>/d.
 """
 import time
 import os
+import string
+import binascii
 import errno
 import sys
 import shutil
@@ -29,7 +31,7 @@ import fcntl
 import tempfile
 import threading
 from enum import Enum
-
+from common.basedir import PARAMS
 
 def mkdirs_exists_ok(path):
   try:
@@ -54,9 +56,12 @@ keys = {
   "AthenadPid": [TxType.PERSISTENT],
   "CalibrationParams": [TxType.PERSISTENT],
   "CarParams": [TxType.CLEAR_ON_MANAGER_START, TxType.CLEAR_ON_PANDA_DISCONNECT],
+  "CarParamsCache": [TxType.CLEAR_ON_MANAGER_START, TxType.CLEAR_ON_PANDA_DISCONNECT],
   "CarVin": [TxType.CLEAR_ON_MANAGER_START, TxType.CLEAR_ON_PANDA_DISCONNECT],
+  "CommunityFeaturesToggle": [TxType.PERSISTENT],
   "CompletedTrainingVersion": [TxType.PERSISTENT],
   "ControlsParams": [TxType.PERSISTENT],
+  "DisablePowerDown": [TxType.PERSISTENT],
   "DoUninstall": [TxType.CLEAR_ON_MANAGER_START],
   "DongleId": [TxType.PERSISTENT],
   "GitBranch": [TxType.PERSISTENT],
@@ -65,19 +70,23 @@ keys = {
   "GithubSshKeys": [TxType.PERSISTENT],
   "HasAcceptedTerms": [TxType.PERSISTENT],
   "HasCompletedSetup": [TxType.PERSISTENT],
+  "IsLdwEnabled": [TxType.PERSISTENT],
   "IsGeofenceEnabled": [TxType.PERSISTENT],
   "IsMetric": [TxType.PERSISTENT],
+  "IsOffroad": [TxType.CLEAR_ON_MANAGER_START],
   "IsRHD": [TxType.PERSISTENT],
-  "IsUpdateAvailable": [TxType.PERSISTENT],
+  "IsTakingSnapshot": [TxType.CLEAR_ON_MANAGER_START],
+  "IsUpdateAvailable": [TxType.CLEAR_ON_MANAGER_START],
   "IsUploadRawEnabled": [TxType.PERSISTENT],
-  "IsUploadVideoOverCellularEnabled": [TxType.PERSISTENT],
   "LastUpdateTime": [TxType.PERSISTENT],
   "LimitSetSpeed": [TxType.PERSISTENT],
   "LimitSetSpeedNeural": [TxType.PERSISTENT],
   "LiveParameters": [TxType.PERSISTENT],
   "LongitudinalControl": [TxType.PERSISTENT],
   "OpenpilotEnabledToggle": [TxType.PERSISTENT],
+  "LaneChangeEnabled": [TxType.PERSISTENT],
   "PandaFirmware": [TxType.CLEAR_ON_MANAGER_START, TxType.CLEAR_ON_PANDA_DISCONNECT],
+  "PandaFirmwareHex": [TxType.CLEAR_ON_MANAGER_START, TxType.CLEAR_ON_PANDA_DISCONNECT],
   "PandaDongleId": [TxType.CLEAR_ON_MANAGER_START, TxType.CLEAR_ON_PANDA_DISCONNECT],
   "Passive": [TxType.PERSISTENT],
   "RecordFront": [TxType.PERSISTENT],
@@ -88,6 +97,7 @@ keys = {
   "TermsVersion": [TxType.PERSISTENT],
   "TrainingVersion": [TxType.PERSISTENT],
   "UpdateAvailable": [TxType.CLEAR_ON_MANAGER_START],
+  "UpdateFailedCount": [TxType.CLEAR_ON_MANAGER_START],
   "Version": [TxType.PERSISTENT],
   "Offroad_ChargeDisabled": [TxType.CLEAR_ON_MANAGER_START, TxType.CLEAR_ON_PANDA_DISCONNECT],
   "Offroad_ConnectivityNeeded": [TxType.CLEAR_ON_MANAGER_START],
@@ -95,9 +105,11 @@ keys = {
   "Offroad_TemperatureTooHigh": [TxType.CLEAR_ON_MANAGER_START],
   "Offroad_PandaFirmwareMismatch": [TxType.CLEAR_ON_MANAGER_START, TxType.CLEAR_ON_PANDA_DISCONNECT],
   "Offroad_InvalidTime": [TxType.CLEAR_ON_MANAGER_START],
+  "Offroad_IsTakingSnapshot": [TxType.CLEAR_ON_MANAGER_START],
   #dragonpilot config
   "DragonEnableDashcam": [TxType.PERSISTENT],
   "DragonEnableDriverSafetyCheck": [TxType.PERSISTENT],
+  "DragonEnableAutoShutdown": [TxType.PERSISTENT],
   "DragonAutoShutdownAt": [TxType.PERSISTENT],
   "DragonEnableSteeringOnSignal": [TxType.PERSISTENT],
   "DragonEnableLogger": [TxType.PERSISTENT],
@@ -107,6 +119,8 @@ keys = {
   "DragonCachedModel": [TxType.PERSISTENT],
   "DragonCachedFP": [TxType.PERSISTENT],
   "DragonCachedVIN": [TxType.PERSISTENT],
+  "DragonCachedCarFW": [TxType.PERSISTENT],
+  "DragonCachedSource": [TxType.PERSISTENT],
   "DragonAllowGas": [TxType.PERSISTENT],
   "DragonToyotaStockDSU": [TxType.PERSISTENT],
   "DragonLatCtrl": [TxType.PERSISTENT],
@@ -141,14 +155,25 @@ keys = {
   "DragonUILead": [TxType.PERSISTENT],
   "DragonUIPath": [TxType.PERSISTENT],
   "DragonUIBlinker": [TxType.PERSISTENT],
+  "DragonUIDMView": [TxType.PERSISTENT],
   "DragonEnableDriverMonitoring": [TxType.PERSISTENT],
   "DragonCarModel": [TxType.PERSISTENT],
-  "DragonCarVIN": [TxType.PERSISTENT],
   "DragonEnableSlowOnCurve": [TxType.PERSISTENT],
   "DragonEnableLeadCarMovingAlert": [TxType.PERSISTENT],
   "DragonToyotaSnGMod": [TxType.PERSISTENT],
-  "DragonIsEON": [TxType.PERSISTENT],
-  "DragonHWChecked": [TxType.PERSISTENT],
+  "DragonEnableSRLearner": [TxType.PERSISTENT],
+  "DragonWazeMode": [TxType.PERSISTENT],
+  "DragonRunWaze": [TxType.PERSISTENT],
+  "DragonEnableAutoLC": [TxType.PERSISTENT],
+  "DragonAssistedLCMinMPH": [TxType.PERSISTENT],
+  "DragonAutoLCMinMPH": [TxType.PERSISTENT],
+  "DragonAutoLCDelay": [TxType.PERSISTENT],
+  "DragonBTG": [TxType.PERSISTENT],
+  "DragonBootHotspot": [TxType.PERSISTENT],
+  "DragonAccelProfile": [TxType.PERSISTENT],
+  "DragonLastModified": [TxType.PERSISTENT],
+  "DragonEnableRegistration": [TxType.PERSISTENT],
+  "DragonDynamicFollow": [TxType.PERSISTENT],
 }
 
 
@@ -368,13 +393,18 @@ def write_db(params_path, key, value):
     lock.release()
 
 class Params():
-  def __init__(self, db='/data/params'):
+  def __init__(self, db=PARAMS):
     self.db = db
 
     # create the database if it doesn't exist...
     if not os.path.exists(self.db+"/d"):
       with self.transaction(write=True):
         pass
+
+  def clear_all(self):
+    shutil.rmtree(self.db, ignore_errors=True)
+    with self.transaction(write=True):
+      pass
 
   def transaction(self, write=False):
     if write:
@@ -448,10 +478,10 @@ if __name__ == "__main__":
       pp = params.get(k)
       if pp is None:
         print("%s is None" % k)
-      elif all(ord(c) < 128 and ord(c) >= 32 for c in pp):
+      elif all(chr(c) in string.printable for c in pp):
         print("%s = %s" % (k, pp))
       else:
-        print("%s = %s" % (k, pp.encode("hex")))
+        print("%s = %s" % (k, binascii.hexlify(pp)))
 
   # Test multiprocess:
   # seq 0 100000 | xargs -P20 -I{} python common/params.py DongleId {} && sleep 0.05

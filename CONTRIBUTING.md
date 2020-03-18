@@ -14,7 +14,7 @@ Most open source development activity is coordinated through our [Discord](https
 
 ### Local Testing
 
-You can test your changes on your machine by running `run_docker_tests.sh`. This will run some automated tests in docker against your code. 
+You can test your changes on your machine by running `run_docker_tests.sh`. This will run some automated tests in docker against your code.
 
 ### Automated Testing
 
@@ -22,10 +22,19 @@ All PRs are automatically checked by travis. Check out `.travis.yml` for what tr
 
 ### Code Style and Linting
 
-Code is automatically check for style by travis as part of the automated tests. You can also run these yourself by running `check_code_quality.sh`. 
+Code is automatically checked for style by travis as part of the automated tests. You can also run these tests yourself by running `pylint_openpilot.sh` and `flake8_openpilot.sh`.
 
 ## Car Ports (openpilot)
 
 We've released a [Model Port guide](https://medium.com/@comma_ai/openpilot-port-guide-for-toyota-models-e5467f4b5fe6) for porting to Toyota/Lexus models.
 
 If you port openpilot to a substantially new car brand, see this more generic [Brand Port guide](https://medium.com/@comma_ai/how-to-write-a-car-port-for-openpilot-7ce0785eda84). You might also be eligible for a bounty. See our bounties at [comma.ai/bounties.html](https://comma.ai/bounties.html)
+
+## Pull Requests
+
+Pull requests should be against the master branch. Before running master on in-car hardware, you'll need to run
+```
+git submodule init
+git submodule update
+```
+in order to pull down the submodules, such as `panda` and `opendbc`.

@@ -44,7 +44,7 @@ ParamsLearner::ParamsLearner(cereal::CarParams::Reader car_params,
   alpha4 = 1.0 * learning_rate;
 }
 
-bool ParamsLearner::update(double psi, double u, double sa) {
+bool ParamsLearner::update(double psi, double u, double sa, bool enable_sr_learner) {
   if (u > 10.0 && fabs(sa) < (DEGREES_TO_RADIANS * 90.)) {
     double ao_diff = 2.0*cF0*cR0*l*u*x*(1.0*cF0*cR0*l*u*x*(ao - sa) + psi*sR*(cF0*cR0*pow(l, 2)*x - m*pow(u, 2)*(aF*cF0 - aR*cR0)))/(pow(sR, 2)*pow(cF0*cR0*pow(l, 2)*x - m*pow(u, 2)*(aF*cF0 - aR*cR0), 2));
     double new_ao = ao - alpha1 * ao_diff;
@@ -54,6 +54,9 @@ bool ParamsLearner::update(double psi, double u, double sa) {
 
     double new_x = x - alpha3 * (-2.0*cF0*cR0*l*m*pow(u, 3)*(slow_ao - sa)*(aF*cF0 - aR*cR0)*(1.0*cF0*cR0*l*u*x*(slow_ao - sa) + psi*sR*(cF0*cR0*pow(l, 2)*x - m*pow(u, 2)*(aF*cF0 - aR*cR0)))/(pow(sR, 2)*pow(cF0*cR0*pow(l, 2)*x - m*pow(u, 2)*(aF*cF0 - aR*cR0), 3)));
     double new_sR = sR - alpha4 * (-2.0*cF0*cR0*l*u*x*(slow_ao - sa)*(1.0*cF0*cR0*l*u*x*(slow_ao - sa) + psi*sR*(cF0*cR0*pow(l, 2)*x - m*pow(u, 2)*(aF*cF0 - aR*cR0)))/(pow(sR, 3)*pow(cF0*cR0*pow(l, 2)*x - m*pow(u, 2)*(aF*cF0 - aR*cR0), 2)));
+    if (!enable_sr_learner) {
+      new_sR = sR;
+    }
 
     ao = new_ao;
     slow_ao = new_slow_ao;
@@ -69,12 +72,16 @@ bool ParamsLearner::update(double psi, double u, double sa) {
   ao = clip(ao, -MAX_ANGLE_OFFSET, MAX_ANGLE_OFFSET);
   slow_ao = clip(slow_ao, -MAX_ANGLE_OFFSET, MAX_ANGLE_OFFSET);
   x = clip(x, MIN_STIFFNESS, MAX_STIFFNESS);
-  sR = clip(sR, min_sr, max_sr);
+  if (enable_sr_learner) {
+    sR = clip(sR, min_sr, max_sr);
 
-  bool valid = fabs(slow_ao) < MAX_ANGLE_OFFSET_TH;
-  valid = valid && sR > min_sr_th;
-  valid = valid && sR < max_sr_th;
-  return valid;
+    bool valid = fabs(slow_ao) < MAX_ANGLE_OFFSET_TH;
+    valid = valid && sR > min_sr_th;
+    valid = valid && sR < max_sr_th;
+    return valid;
+  } else {
+    return true;
+  }
 }
 
 
@@ -93,7 +100,7 @@ extern "C" {
 
   bool params_learner_update(void * params_learner, double psi, double u, double sa) {
     ParamsLearner * p = (ParamsLearner*) params_learner;
-    return p->update(psi, u, sa);
+    return p->update(psi, u, sa, true);
   }
 
   double params_learner_get_ao(void * params_learner){

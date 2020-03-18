@@ -5,7 +5,7 @@ from cereal import car, log
 # Priority
 class Priority:
   LOWEST = 0
-  LOW_LOWEST = 1
+  LOWER = 1
   LOW = 2
   MID = 3
   HIGH = 4
@@ -83,6 +83,13 @@ ALERTS = [
       Priority.HIGHEST, VisualAlert.fcw, AudibleAlert.chimeWarningRepeat, 1., 2., 2.),
 
   Alert(
+      "fcwStock",
+      "馬上剎車！",
+      "有碰撞風險",
+      AlertStatus.critical, AlertSize.full,
+      Priority.HIGHEST, VisualAlert.fcw, AudibleAlert.none, 1., 2., 2.),  # no EON chime for stock FCW
+
+  Alert(
       "steerSaturated",
       "接管控制",
       "彎道超過方向盤轉向限制",
@@ -133,7 +140,7 @@ ALERTS = [
 
   Alert(
       "promptDriverUnresponsive",
-      "觸碰方向盤",
+      "請觸碰方向盤",
       "駕駛沒有反應",
       AlertStatus.userPrompt, AlertSize.mid,
       Priority.MID, VisualAlert.steerRequired, AudibleAlert.chimeWarning2, .1, .1, .1),
@@ -146,18 +153,11 @@ ALERTS = [
       Priority.HIGH, VisualAlert.steerRequired, AudibleAlert.chimeWarningRepeat, .1, .1, .1),
 
   Alert(
-      "driverMonitorOff",
-      "駕駛監控暫時停用",
-      "監控準確率：低",
+      "driverMonitorLowAcc",
+      "請檢查駕駛面部的可見度",
+      "駕駛監控模型輸出不明確",
       AlertStatus.normal, AlertSize.mid,
-      Priority.LOW, VisualAlert.none, AudibleAlert.none, .4, 0., 4.),
-
-  Alert(
-      "driverMonitorOn",
-      "駕駛監控已啟用",
-      "監控準確率：高",
-      AlertStatus.normal, AlertSize.mid,
-      Priority.LOW, VisualAlert.none, AudibleAlert.none, .4, 0., 4.),
+      Priority.LOW, VisualAlert.steerRequired, AudibleAlert.none, .4, 0., 1.),
 
   Alert(
       "geofence",
@@ -171,21 +171,28 @@ ALERTS = [
       "隨時準備好接管",
       "請您將手放在方向盤上並持續注意路況",
       AlertStatus.normal, AlertSize.mid,
-      Priority.LOW_LOWEST, VisualAlert.none, AudibleAlert.none, 0., 0., 15.),
+      Priority.LOWER, VisualAlert.none, AudibleAlert.none, 0., 0., 15.),
+
+  Alert(
+      "startupMaster",
+      "WARNING: This branch is not tested",
+      "Always keep hands on wheel and eyes on road",
+      AlertStatus.userPrompt, AlertSize.mid,
+      Priority.LOWER, VisualAlert.none, AudibleAlert.none, 0., 0., 15.),
 
   Alert(
       "startupNoControl",
       "行車記錄模式",
       "請您將手放在方向盤上並持續注意路況",
       AlertStatus.normal, AlertSize.mid,
-      Priority.LOW_LOWEST, VisualAlert.none, AudibleAlert.none, 0., 0., 15.),
+      Priority.LOWER, VisualAlert.none, AudibleAlert.none, 0., 0., 15.),
 
   Alert(
       "startupNoCar",
       "行車記錄模式 (尚未支援車種)",
       "請您將手放在方向盤上並持續注意路況",
       AlertStatus.normal, AlertSize.mid,
-      Priority.LOW_LOWEST, VisualAlert.none, AudibleAlert.none, 0., 0., 15.),
+      Priority.LOWER, VisualAlert.none, AudibleAlert.none, 0., 0., 15.),
 
   Alert(
       "ethicalDilemma",
@@ -228,6 +235,33 @@ ALERTS = [
       "",
       AlertStatus.userPrompt, AlertSize.mid,
       Priority.LOW, VisualAlert.none, AudibleAlert.none, .1, .1, .1),
+  Alert(
+      "preLaneChangeLeft",
+      "請往左打方向盤切換車道",
+      "請注意其它車輛",
+      AlertStatus.normal, AlertSize.mid,
+      Priority.LOW, VisualAlert.steerRequired, AudibleAlert.none, .0, .1, .1, alert_rate=0.75),
+
+  Alert(
+      "preLaneChangeRight",
+      "請往右打方向盤切換車道",
+      "請注意其它車輛",
+      AlertStatus.normal, AlertSize.mid,
+      Priority.LOW, VisualAlert.steerRequired, AudibleAlert.none, .0, .1, .1, alert_rate=0.75),
+
+  Alert(
+      "laneChange",
+      "切換車道中",
+      "請注意其它車輛",
+      AlertStatus.normal, AlertSize.mid,
+      Priority.LOW, VisualAlert.steerRequired, AudibleAlert.none, .0, .1, .1),
+
+  Alert(
+      "posenetInvalid",
+      "接管控制",
+      "視覺模型輸出不明確",
+      AlertStatus.userPrompt, AlertSize.mid,
+      Priority.LOW, VisualAlert.steerRequired, AudibleAlert.chimeWarning1, .4, 2., 3.),
 
   # Non-entry only alerts
   Alert(
@@ -296,7 +330,7 @@ ALERTS = [
   Alert(
       "sensorDataInvalidNoEntry",
       "無法使用 dragonpilot",
-      "沒有收到任何來自 EON 傳感器的資料",
+      "沒有收到任何來自裝置傳感器的資料",
       AlertStatus.normal, AlertSize.mid,
       Priority.LOW, VisualAlert.none, AudibleAlert.chimeError, .4, 2., 3.),
 
@@ -332,7 +366,7 @@ ALERTS = [
   Alert(
       "calibrationInvalid",
       "即刻接管控制",
-      "校準無效：請將 EON 放於新的位置並重新校準",
+      "校準無效：請將裝置放於新的位置並重新校準",
       AlertStatus.critical, AlertSize.full,
       Priority.MID, VisualAlert.steerRequired, AudibleAlert.chimeWarningRepeat, .1, 2., 2.),
 
@@ -379,6 +413,13 @@ ALERTS = [
       Priority.MID, VisualAlert.steerRequired, AudibleAlert.chimeWarningRepeat, .1, 2., 2.),
 
   Alert(
+      "radarCommIssue",
+      "即刻接管控制",
+      "雷達通訊出現問題",
+      AlertStatus.critical, AlertSize.full,
+      Priority.MID, VisualAlert.steerRequired, AudibleAlert.chimeWarningRepeat, .1, 2., 2.),
+
+  Alert(
       "radarCanError",
       "即刻接管控制",
       "雷達訊號錯誤：請重新發動車子",
@@ -392,10 +433,11 @@ ALERTS = [
       AlertStatus.critical, AlertSize.full,
       Priority.MID, VisualAlert.steerRequired, AudibleAlert.chimeWarningRepeat, .1, 2., 2.),
 
+
   Alert(
-      "posenetInvalid",
+      "lowMemory",
       "即刻接管控制",
-      "視覺出現錯誤：請檢查相機",
+      "記憶體不足：請重啟您的裝置",
       AlertStatus.critical, AlertSize.full,
       Priority.MID, VisualAlert.steerRequired, AudibleAlert.chimeWarningRepeat, .1, 2., 2.),
 
@@ -478,13 +520,6 @@ ALERTS = [
       AlertStatus.normal, AlertSize.mid,
       Priority.HIGH, VisualAlert.none, AudibleAlert.chimeDisengage, .4, 2., 3.),
 
-  Alert(
-      "invalidGiraffeHonda",
-      "Giraffe 開關錯誤",
-      "dragonpilot 模式為 0111，原廠模式為 1011",
-      AlertStatus.normal, AlertSize.mid,
-      Priority.HIGH, VisualAlert.none, AudibleAlert.chimeDisengage, .4, 2., 3.),
-
   # Cancellation alerts causing non-entry
   Alert(
       "overheatNoEntry",
@@ -503,7 +538,7 @@ ALERTS = [
   Alert(
       "calibrationInvalidNoEntry",
       "無法使用 dragonpilot",
-      "校準無效：請將 EON 放於新的位置並重新校準",
+      "校準無效：請將裝置放於新的位置並重新校準",
       AlertStatus.normal, AlertSize.mid,
       Priority.LOW, VisualAlert.none, AudibleAlert.chimeError, .4, 2., 3.),
 
@@ -559,7 +594,7 @@ ALERTS = [
   Alert(
       "posenetInvalidNoEntry",
       "無法使用 dragonpilot",
-      "視覺錯誤：請檢查相機",
+      "視覺模型輸出不明確",
       AlertStatus.normal, AlertSize.mid,
       Priority.LOW, VisualAlert.none, AudibleAlert.chimeError, .4, 2., 3.),
 
@@ -627,30 +662,30 @@ ALERTS = [
       Priority.LOW, VisualAlert.none, AudibleAlert.chimeError, .4, 2., 3.),
 
   Alert(
-      "invalidGiraffeHondaNoEntry",
-      "無法使用 dragonpilot",
-      "penpilot 模式為 0111，原廠模式為 1011",
-      AlertStatus.normal, AlertSize.mid,
-      Priority.LOW, VisualAlert.none, AudibleAlert.chimeDisengage, .4, 2., 3.),
-
-  Alert(
-      "invalidGiraffeToyotaNoEntry",
-      "無法使用 dragonpilot",
-      "請瀏覽 comma.ai/tg",
-      AlertStatus.normal, AlertSize.mid,
-      Priority.LOW, VisualAlert.none, AudibleAlert.chimeDisengage, .4, 2., 3.),
-
-  Alert(
       "commIssueNoEntry",
       "無法使用 dragonpilot",
-      "程序間出現通訊問題",
+      "行程出現通訊問題",
+      AlertStatus.normal, AlertSize.mid,
+      Priority.LOW, VisualAlert.none, AudibleAlert.chimeDisengage, .4, 2., 3.),
+
+  Alert(
+      "radarCommIssueNoEntry",
+      "無法使用 dragonpilot",
+      "雷達通訊出現問題",
       AlertStatus.normal, AlertSize.mid,
       Priority.LOW, VisualAlert.none, AudibleAlert.chimeDisengage, .4, 2., 3.),
 
   Alert(
       "internetConnectivityNeededNoEntry",
       "無法使用 dragonpilot",
-      "需要網路連線",
+      "請連接網路",
+      AlertStatus.normal, AlertSize.mid,
+      Priority.LOW, VisualAlert.none, AudibleAlert.chimeDisengage, .4, 2., 3.),
+
+  Alert(
+      "lowMemoryNoEntry",
+      "無法使用 dragonpilot",
+      "記憶體不足：請重啟您的裝置",
       AlertStatus.normal, AlertSize.mid,
       Priority.LOW, VisualAlert.none, AudibleAlert.chimeDisengage, .4, 2., 3.),
 
@@ -660,21 +695,21 @@ ALERTS = [
       "LKAS 錯誤：請重新發動車子",
       "",
       AlertStatus.normal, AlertSize.small,
-      Priority.LOW_LOWEST, VisualAlert.none, AudibleAlert.none, 0., 0., .2),
+      Priority.LOWER, VisualAlert.none, AudibleAlert.none, 0., 0., .2),
 
   Alert(
       "brakeUnavailablePermanent",
       "巡航系統錯誤：請重新發動車子",
       "",
       AlertStatus.normal, AlertSize.small,
-      Priority.LOW_LOWEST, VisualAlert.none, AudibleAlert.none, 0., 0., .2),
+      Priority.LOWER, VisualAlert.none, AudibleAlert.none, 0., 0., .2),
 
   Alert(
       "lowSpeedLockoutPermanent",
       "巡航系統錯誤：請重新發動車子",
       "",
       AlertStatus.normal, AlertSize.small,
-      Priority.LOW_LOWEST, VisualAlert.none, AudibleAlert.none, 0., 0., .2),
+      Priority.LOWER, VisualAlert.none, AudibleAlert.none, 0., 0., .2),
 
   Alert(
       "calibrationIncompletePermanent",
@@ -684,39 +719,53 @@ ALERTS = [
       Priority.LOWEST, VisualAlert.none, AudibleAlert.none, 0., 0., .2),
 
   Alert(
-      "invalidGiraffeHondaPermanent",
-      "Giraffe 開關錯誤",
-      "dragonpilot 模式為 0111，原廠模式為 1011",
-      AlertStatus.normal, AlertSize.mid,
-      Priority.LOW_LOWEST, VisualAlert.none, AudibleAlert.none, 0., 0., .2),
-
-  Alert(
       "invalidGiraffeToyotaPermanent",
       "未支援的 Giraffe 設置",
       "請查閱 comma.ai/tg",
       AlertStatus.normal, AlertSize.mid,
-      Priority.LOW_LOWEST, VisualAlert.none, AudibleAlert.none, 0., 0., .2),
+      Priority.LOWER, VisualAlert.none, AudibleAlert.none, 0., 0., .2),
 
   Alert(
       "internetConnectivityNeededPermanent",
-      "需要網路連線",
-      "請先檢查更新才能啟用",
+      "請連接網路",
+      "需檢查更新後才能啟用",
       AlertStatus.normal, AlertSize.mid,
-      Priority.LOW_LOWEST, VisualAlert.none, AudibleAlert.none, 0., 0., .2),
+      Priority.LOWER, VisualAlert.none, AudibleAlert.none, 0., 0., .2),
+
+  Alert(
+      "communityFeatureDisallowedPermanent",
+      "偵測到社群開發功能",
+      "請至開發人員設定裡啟用社群開發功能",
+      AlertStatus.normal, AlertSize.mid,
+      Priority.LOW, VisualAlert.none, AudibleAlert.none, 0., 0., .2),  # LOW priority to overcome Cruise Error
 
   Alert(
       "sensorDataInvalidPermanent",
       "沒有收到任何來自 EON 傳感器的資料",
-      "請重啟您的 EON",
+      "請重啟您的裝置",
       AlertStatus.normal, AlertSize.mid,
-      Priority.LOW_LOWEST, VisualAlert.none, AudibleAlert.none, 0., 0., .2),
+      Priority.LOWER, VisualAlert.none, AudibleAlert.none, 0., 0., .2),
 
   Alert(
       "soundsUnavailablePermanent",
       "找不到音效裝置",
-      "請重啟您的 EON",
+      "請重啟您的裝置",
       AlertStatus.normal, AlertSize.mid,
-      Priority.LOW_LOWEST, VisualAlert.none, AudibleAlert.none, 0., 0., .2),
+      Priority.LOWER, VisualAlert.none, AudibleAlert.none, 0., 0., .2),
+
+  Alert(
+      "lowMemoryPermanent",
+      "記憶體嚴重不足",
+      "請重啟您的裝置",
+      AlertStatus.normal, AlertSize.mid,
+      Priority.LOWER, VisualAlert.none, AudibleAlert.none, 0., 0., .2),
+
+  Alert(
+      "carUnrecognizedPermanent",
+      "行車記錄模式",
+      "無法辨識您的車款",
+      AlertStatus.normal, AlertSize.mid,
+      Priority.LOWER, VisualAlert.none, AudibleAlert.none, 0., 0., .2),
 
   Alert(
       "vehicleModelInvalid",
@@ -725,6 +774,14 @@ ALERTS = [
       AlertStatus.normal, AlertSize.small,
       Priority.LOWEST, VisualAlert.steerRequired, AudibleAlert.none, .0, .0, .1),
 
+  # offroad alerts
+  Alert(
+      "ldwPermanent",
+      "接管控制",
+      "偵測到已偏離車道",
+      AlertStatus.userPrompt, AlertSize.mid,
+      Priority.LOW, VisualAlert.steerRequired, AudibleAlert.chimePrompt, 1., 2., 3.),
+  # dragonpilot
   Alert(
     "manualSteeringRequired",
     "請接管方向盤：車道維持關閉",
@@ -750,4 +807,24 @@ ALERTS = [
     "",
     AlertStatus.normal, AlertSize.small,
     Priority.LOW, VisualAlert.none, AudibleAlert.none, .0, .1, .1, alert_rate=0.25),
+  Alert(
+    "preAutoLaneChangeLeft",
+    "將在三秒後自動切至左車道",
+    "請注意其它車輛",
+    AlertStatus.normal, AlertSize.mid,
+    Priority.LOW, VisualAlert.steerRequired, AudibleAlert.chimeWarning2, .1, .1, .1, alert_rate=0.75),
+
+  Alert(
+    "preAutoLaneChangeRight",
+    "將在三秒後自動切至右車道",
+    "請注意其它車輛",
+    AlertStatus.normal, AlertSize.mid,
+    Priority.LOW, VisualAlert.steerRequired, AudibleAlert.chimeWarning2, .1, .1, .1, alert_rate=0.75),
+
+  Alert(
+    "autoLaneChange",
+    "切換車道中",
+    "請注意其它車輛",
+    AlertStatus.normal, AlertSize.mid,
+    Priority.LOW, VisualAlert.steerRequired, AudibleAlert.chimeWarning2, .1, .1, .1),
 ]

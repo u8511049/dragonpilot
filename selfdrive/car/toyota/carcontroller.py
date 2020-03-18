@@ -1,15 +1,13 @@
 from cereal import car
-from common.numpy_fast import clip, interp
-from selfdrive.car import apply_toyota_steer_torque_limits
-from selfdrive.car import create_gas_command
-from selfdrive.car.toyota.toyotacan import make_can_msg, \
-                                           create_steer_command, create_ui_command, \
-                                           create_ipas_steer_command, create_accel_command, \
-                                           create_acc_cancel_command, create_fcw_command
-from selfdrive.car.toyota.values import CAR, ECU, STATIC_MSGS, TSS2_CAR, SteerLimitParams
-from selfdrive.can.packer import CANPacker
+from common.numpy_fast import clip
+from selfdrive.car import apply_toyota_steer_torque_limits, create_gas_command, make_can_msg
+from selfdrive.car.toyota.toyotacan import create_steer_command, create_ui_command, \
+                                           create_accel_command, create_acc_cancel_command, create_fcw_command
+from selfdrive.car.toyota.values import Ecu, CAR, STATIC_MSGS, SteerLimitParams
+from opendbc.can.packer import CANPacker
 from common.params import Params
 params = Params()
+from selfdrive.dragonpilot.dragonconf import dp_get_last_modified
 
 VisualAlert = car.CarControl.HUDControl.VisualAlert
 
@@ -18,20 +16,6 @@ ACCEL_HYST_GAP = 0.02  # don't change accel command for small oscilalitons withi
 ACCEL_MAX = 1.5  # 1.5 m/s2
 ACCEL_MIN = -3.0 # 3   m/s2
 ACCEL_SCALE = max(ACCEL_MAX, -ACCEL_MIN)
-
-
-# Steer angle limits (tested at the Crows Landing track and considered ok)
-ANGLE_MAX_BP = [0., 5.]
-ANGLE_MAX_V = [510., 300.]
-ANGLE_DELTA_BP = [0., 5., 15.]
-ANGLE_DELTA_V = [5., .8, .15]     # windup limit
-ANGLE_DELTA_VU = [5., 3.5, 0.4]   # unwind limit
-
-TARGET_IDS = [0x340, 0x341, 0x342, 0x343, 0x344, 0x345,
-              0x363, 0x364, 0x365, 0x370, 0x371, 0x372,
-              0x373, 0x374, 0x375, 0x380, 0x381, 0x382,
-              0x383]
-
 
 def accel_hysteresis(accel, accel_steady, enabled):
 
@@ -61,73 +45,53 @@ def process_hud_alert(hud_alert):
   return steer, fcw
 
 
-def ipas_state_transition(steer_angle_enabled, enabled, ipas_active, ipas_reset_counter):
-
-  if enabled and not steer_angle_enabled:
-    #ipas_reset_counter = max(0, ipas_reset_counter - 1)
-    #if ipas_reset_counter == 0:
-    #  steer_angle_enabled = True
-    #else:
-    #  steer_angle_enabled = False
-    #return steer_angle_enabled, ipas_reset_counter
-    return True, 0
-
-  elif enabled and steer_angle_enabled:
-    if steer_angle_enabled and not ipas_active:
-      ipas_reset_counter += 1
-    else:
-      ipas_reset_counter = 0
-    if ipas_reset_counter > 10:  # try every 0.1s
-      steer_angle_enabled = False
-    return steer_angle_enabled, ipas_reset_counter
-
-  else:
-    return False, 0
-
-
 class CarController():
-  def __init__(self, dbc_name, car_fingerprint, enable_camera, enable_dsu, enable_apg):
+  def __init__(self, dbc_name, CP, VM):
     self.braking = False
-    # redundant safety check with the board
-    self.controls_allowed = True
     self.last_steer = 0
-    self.last_angle = 0
     self.accel_steady = 0.
-    self.car_fingerprint = car_fingerprint
+    self.car_fingerprint = CP.carFingerprint
     self.alert_active = False
     self.last_standstill = False
     self.standstill_req = False
-    self.angle_control = False
 
-    self.steer_angle_enabled = False
-    self.ipas_reset_counter = 0
     self.last_fault_frame = -200
+    self.steer_rate_limited = False
 
     self.fake_ecus = set()
-    if enable_camera: self.fake_ecus.add(ECU.CAM)
-    if enable_dsu: self.fake_ecus.add(ECU.DSU)
-    if enable_apg: self.fake_ecus.add(ECU.APGS)
+    if CP.enableCamera: self.fake_ecus.add(Ecu.fwdCamera)
+    if CP.enableDsu: self.fake_ecus.add(Ecu.dsu)
 
     self.packer = CANPacker(dbc_name)
 
     # dragonpilot
     self.turning_signal_timer = 0
     self.dragon_enable_steering_on_signal = False
-    # self.dragon_allow_gas = False
     self.dragon_lat_ctrl = True
     self.dragon_lane_departure_warning = True
     self.dragon_toyota_sng_mod = False
+    self.dp_last_modified = None
+    self.lane_change_enabled = True
 
   def update(self, enabled, CS, frame, actuators, pcm_cancel_cmd, hud_alert,
              left_line, right_line, lead, left_lane_depart, right_lane_depart):
 
     # dragonpilot, don't check for param too often as it's a kernel call
     if frame % 500 == 0:
-      self.dragon_enable_steering_on_signal = True if params.get("DragonEnableSteeringOnSignal", encoding='utf8') == "1" else False
-      # self.dragon_allow_gas = True if params.get("DragonAllowGas", encoding='utf8') == "1" else False
-      self.dragon_lat_ctrl = False if params.get("DragonLatCtrl", encoding='utf8') == "0" else True
-      self.dragon_lane_departure_warning = False if params.get("DragonToyotaLaneDepartureWarning", encoding='utf8') == "0" else True
-      self.dragon_toyota_sng_mod = True if params.get("DragonToyotaSnGMod", encoding='utf8') == "1" else False
+      modified = dp_get_last_modified()
+      if self.dp_last_modified != modified:
+        self.dragon_lane_departure_warning = False if params.get("DragonToyotaLaneDepartureWarning", encoding='utf8') == "0" else True
+        self.dragon_toyota_sng_mod = True if params.get("DragonToyotaSnGMod", encoding='utf8') == "1" else False
+        self.dragon_lat_ctrl = False if params.get("DragonLatCtrl", encoding='utf8') == "0" else True
+        if self.dragon_lat_ctrl:
+          self.lane_change_enabled = False if params.get("LaneChangeEnabled", encoding='utf8') == "1" else False
+          if not self.lane_change_enabled:
+            self.dragon_enable_steering_on_signal = True if params.get("DragonEnableSteeringOnSignal", encoding='utf8') == "1" else False
+          else:
+            self.dragon_enable_steering_on_signal = False
+        else:
+          self.dragon_enable_steering_on_signal = False
+        self.dp_last_modified = modified
 
     # *** compute control surfaces ***
 
@@ -146,9 +110,9 @@ class CarController():
     apply_accel = clip(apply_accel * ACCEL_SCALE, ACCEL_MIN, ACCEL_MAX)
 
     # steer torque
-    apply_steer = int(round(actuators.steer * SteerLimitParams.STEER_MAX))
-
-    apply_steer = apply_toyota_steer_torque_limits(apply_steer, self.last_steer, CS.steer_torque_motor, SteerLimitParams)
+    new_steer = int(round(actuators.steer * SteerLimitParams.STEER_MAX))
+    apply_steer = apply_toyota_steer_torque_limits(new_steer, self.last_steer, CS.out.steeringTorqueEps, SteerLimitParams)
+    self.steer_rate_limited = new_steer != apply_steer
 
     # only cut torque when steer state is a known fault
     if CS.steer_state in [9, 25]:
@@ -161,65 +125,39 @@ class CarController():
     else:
       apply_steer_req = 1
 
-    self.steer_angle_enabled, self.ipas_reset_counter = \
-      ipas_state_transition(self.steer_angle_enabled, enabled, CS.ipas_active, self.ipas_reset_counter)
-    #print("{0} {1} {2}".format(self.steer_angle_enabled, self.ipas_reset_counter, CS.ipas_active))
-
-    # steer angle
-    if self.steer_angle_enabled and CS.ipas_active:
-      apply_angle = actuators.steerAngle
-      angle_lim = interp(CS.v_ego, ANGLE_MAX_BP, ANGLE_MAX_V)
-      apply_angle = clip(apply_angle, -angle_lim, angle_lim)
-
-      # windup slower
-      if self.last_angle * apply_angle > 0. and abs(apply_angle) > abs(self.last_angle):
-        angle_rate_lim = interp(CS.v_ego, ANGLE_DELTA_BP, ANGLE_DELTA_V)
-      else:
-        angle_rate_lim = interp(CS.v_ego, ANGLE_DELTA_BP, ANGLE_DELTA_VU)
-
-      apply_angle = clip(apply_angle, self.last_angle - angle_rate_lim, self.last_angle + angle_rate_lim)
-    else:
-      apply_angle = CS.angle_steers
-
     if not enabled and CS.pcm_acc_status:
       # send pcm acc cancel cmd if drive is disabled but pcm is still on, or if the system can't be activated
       pcm_cancel_cmd = 1
 
     # on entering standstill, send standstill request
-    if not self.dragon_toyota_sng_mod and CS.standstill and not self.last_standstill:
+    if not self.dragon_toyota_sng_mod and CS.out.standstill and not self.last_standstill:
       self.standstill_req = True
     if CS.pcm_acc_status != 8:
       # pcm entered standstill or it's disabled
       self.standstill_req = False
 
     self.last_steer = apply_steer
-    self.last_angle = apply_angle
     self.last_accel = apply_accel
-    self.last_standstill = CS.standstill
+    self.last_standstill = CS.out.standstill
 
     can_sends = []
 
     # dragonpilot
-    if enabled and (CS.left_blinker_on or CS.right_blinker_on) and self.dragon_enable_steering_on_signal:
-      self.turning_signal_timer = 100
+    if enabled:
+      if self.dragon_enable_steering_on_signal:
+        if not CS.out.leftBlinker and not CS.out.rightBlinker:
+          self.turning_signal_timer = 0
+        else:
+          self.turning_signal_timer = 100
 
-    if self.turning_signal_timer > 0:
-      self.turning_signal_timer -= 1
-      apply_steer_req = 0
+        if self.turning_signal_timer > 0:
+          self.turning_signal_timer -= 1
+          apply_steer_req = 0
+      else:
+        self.turning_signal_timer = 0
 
-    if not self.dragon_lat_ctrl:
-      apply_steer_req = 0
-
-    if CS.v_ego > 12.5 and not enabled:
-      if right_lane_depart and not CS.right_blinker_on:
-        apply_steer = self.last_steer + 3
-        apply_steer = min(apply_steer , 800)
-        apply_steer_req = 1
-
-      if left_lane_depart and not CS.left_blinker_on:
-        apply_steer = self.last_steer - 3
-        apply_steer = max(apply_steer , -800)
-        apply_steer_req = 1
+      if not self.dragon_lat_ctrl:
+        apply_steer_req = 0
 
     #*** control msgs ***
     #print("steer {0} {1} {2} {3}".format(apply_steer, min_lim, max_lim, CS.steer_torque_motor)
@@ -227,39 +165,17 @@ class CarController():
     # toyota can trace shows this message at 42Hz, with counter adding alternatively 1 and 2;
     # sending it at 100Hz seem to allow a higher rate limit, as the rate limit seems imposed
     # on consecutive messages
-    if ECU.CAM in self.fake_ecus:
-      if self.angle_control:
-        can_sends.append(create_steer_command(self.packer, 0., 0, frame))
-      else:
-        can_sends.append(create_steer_command(self.packer, apply_steer, apply_steer_req, frame))
+    if Ecu.fwdCamera in self.fake_ecus:
+      can_sends.append(create_steer_command(self.packer, apply_steer, apply_steer_req, frame))
 
-    if self.angle_control:
-      can_sends.append(create_ipas_steer_command(self.packer, apply_angle, self.steer_angle_enabled,
-                                                 ECU.APGS in self.fake_ecus))
-    elif ECU.APGS in self.fake_ecus:
-      can_sends.append(create_ipas_steer_command(self.packer, 0, 0, True))
-
-    # # DragonAllowGas
-    # # if we detect gas pedal pressed, we do not want OP to apply gas or brake
-    # # gasPressed code from interface.py
-    # if CS.CP.enableGasInterceptor:
-    #   # use interceptor values to disengage on pedal press
-    #   gas_pressed = CS.pedal_gas > 15
-    # else:
-    #   gas_pressed = CS.pedal_gas > 0
-    #
-    # if self.dragon_allow_gas and gas_pressed:
-    #   apply_accel = 0
-    #   apply_gas = 0
-    #
-    # accel cmd comes from DSU, but we can spam can to cancel the system even if we are using lat only control
-    if (frame % 3 == 0 and ECU.DSU in self.fake_ecus) or (pcm_cancel_cmd and ECU.CAM in self.fake_ecus):
-      lead = lead or CS.v_ego < 12.    # at low speed we always assume the lead is present do ACC can be engaged
+    # we can spam can to cancel the system even if we are using lat only control
+    if (frame % 3 == 0 and CS.CP.openpilotLongitudinalControl) or (pcm_cancel_cmd and Ecu.fwdCamera in self.fake_ecus):
+      lead = lead or CS.out.vEgo < 12.    # at low speed we always assume the lead is present do ACC can be engaged
 
       # Lexus IS uses a different cancellation message
       if pcm_cancel_cmd and CS.CP.carFingerprint in [CAR.LEXUS_IS, CAR.LEXUS_ISH, CAR.LEXUS_GSH]:
         can_sends.append(create_acc_cancel_command(self.packer))
-      elif ECU.DSU in self.fake_ecus:
+      elif CS.CP.openpilotLongitudinalControl:
         can_sends.append(create_accel_command(self.packer, apply_accel, pcm_cancel_cmd, self.standstill_req, lead))
       else:
         can_sends.append(create_accel_command(self.packer, 0, pcm_cancel_cmd, False, lead))
@@ -294,16 +210,16 @@ class CarController():
       dragon_left_lane_depart = False
       dragon_right_lane_depart = False
 
-    if (frame % 100 == 0 or send_ui) and ECU.CAM in self.fake_ecus:
+    if (frame % 100 == 0 or send_ui) and Ecu.fwdCamera in self.fake_ecus:
       can_sends.append(create_ui_command(self.packer, steer, pcm_cancel_cmd, left_line, right_line, dragon_left_lane_depart, dragon_right_lane_depart))
 
-    if frame % 100 == 0 and ECU.DSU in self.fake_ecus and self.car_fingerprint not in TSS2_CAR:
+    if frame % 100 == 0 and Ecu.dsu in self.fake_ecus:
       can_sends.append(create_fcw_command(self.packer, fcw))
 
     #*** static msgs ***
 
     for (addr, ecu, cars, bus, fr_step, vl) in STATIC_MSGS:
       if frame % fr_step == 0 and ecu in self.fake_ecus and self.car_fingerprint in cars:
-        can_sends.append(make_can_msg(addr, vl, bus, False))
+        can_sends.append(make_can_msg(addr, vl, bus))
 
     return can_sends

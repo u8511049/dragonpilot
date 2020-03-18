@@ -31,5 +31,5 @@ public:
                 double steer_ratio,
                 double learning_rate);
 
-  bool update(double psi, double u, double sa);
+  bool update(double psi, double u, double sa, bool enable_sr_learner);
 };
