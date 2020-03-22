@@ -207,8 +207,29 @@ def thermald_thread():
   dragon_charging_ctrl_prev = False
   dragon_to_discharge = 70
   dragon_to_charge = 60
+  dp_temp_monitor = True
 
   while 1:
+    # dragonpilot
+    ts = sec_since_boot()
+    # update variable status every 10 secs
+    if ts - ts_last_update_vars >= 10.:
+      modified = dp_get_last_modified()
+      if dp_last_modified != modified:
+        dragon_charging_ctrl = True if params.get('DragonChargingCtrl', encoding='utf8') == "1" else False
+        dp_temp_monitor = True if params.get('DragonEnableTempMonitor', encoding='utf8') == "1" else False
+        if dragon_charging_ctrl:
+          try:
+            dragon_to_discharge = int(params.get('DragonCharging', encoding='utf8'))
+          except (TypeError, ValueError):
+            dragon_to_discharge = 70
+          try:
+            dragon_to_charge = int(params.get('DragonDisCharging', encoding='utf8'))
+          except (TypeError, ValueError):
+            dragon_to_charge = 60
+        dp_last_modified = modified
+      ts_last_update_vars = ts
+
     health = messaging.recv_sock(health_sock, wait=True)
     location = messaging.recv_sock(location_sock)
     location = location.gpsLocation if location else None
@@ -367,13 +388,14 @@ def thermald_thread():
 
     # if any CPU gets above 107 or the battery gets above 63, kill all processes
     # controls will warn with CPU above 95 or battery above 60
-    if thermal_status >= ThermalStatus.danger:
-      should_start = False
-      if thermal_status_prev < ThermalStatus.danger:
-        params.put("Offroad_TemperatureTooHigh", json.dumps(OFFROAD_ALERTS["Offroad_TemperatureTooHigh"]))
-    else:
-      if thermal_status_prev >= ThermalStatus.danger:
-        params.delete("Offroad_TemperatureTooHigh")
+    if dp_temp_monitor:
+      if thermal_status >= ThermalStatus.danger:
+        should_start = False
+        if thermal_status_prev < ThermalStatus.danger:
+          params.put("Offroad_TemperatureTooHigh", json.dumps(OFFROAD_ALERTS["Offroad_TemperatureTooHigh"]))
+      else:
+        if thermal_status_prev >= ThermalStatus.danger:
+          params.delete("Offroad_TemperatureTooHigh")
 
     if should_start:
       if not should_start_prev:
@@ -419,25 +441,6 @@ def thermald_thread():
     usb_power_prev = usb_power
     fw_version_match_prev = fw_version_match
     should_start_prev = should_start
-
-    # dragonpilot
-    ts = sec_since_boot()
-    # update variable status every 10 secs
-    if ts - ts_last_update_vars >= 10.:
-      modified = dp_get_last_modified()
-      if dp_last_modified != modified:
-        dragon_charging_ctrl = True if params.get('DragonChargingCtrl', encoding='utf8') == "1" else False
-        if dragon_charging_ctrl:
-          try:
-            dragon_to_discharge = int(params.get('DragonCharging', encoding='utf8'))
-          except TypeError:
-            dragon_to_discharge = 70
-          try:
-            dragon_to_charge = int(params.get('DragonDisCharging', encoding='utf8'))
-          except TypeError:
-            dragon_to_charge = 60
-        dp_last_modified = modified
-      ts_last_update_vars = ts
 
     if dragon_charging_ctrl != dragon_charging_ctrl_prev:
       set_battery_charging(True)

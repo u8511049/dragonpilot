@@ -177,6 +177,7 @@ keys = {
   "DragonEnableDoorCheck": [TxType.PERSISTENT],
   "DragonEnableSeatBeltCheck": [TxType.PERSISTENT],
   "DragonEnableGearCheck": [TxType.PERSISTENT],
+  "DragonEnableTempMonitor": [TxType.PERSISTENT],
 }
 
 

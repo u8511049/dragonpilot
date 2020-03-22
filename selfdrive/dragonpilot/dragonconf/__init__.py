@@ -75,6 +75,7 @@ default_conf = {
   'DragonEnableDoorCheck': '1',
   'DragonEnableSeatBeltCheck': '1',
   'DragonEnableGearCheck': '1',
+  'DragonEnableTempMonitor': '1',
 }
 
 deprecated_conf = {
