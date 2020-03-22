@@ -61,8 +61,8 @@ def dmonitoringd_thread(sm=None, pm=None):
           dp_enable_driver_monitoring = False if params.get("DragonEnableDriverMonitoring", encoding='utf8') == "0" else True
           try:
             dp_awareness_time = int(params.get("DragonSteeringMonitorTimer", encoding='utf8'))
-          except TypeError:
-            dp_awareness_time = 0.
+          except (TypeError, ValueError):
+            dp_awareness_time = 70.
           driver_status.awareness_time = 86400 if dp_awareness_time <= 0. else dp_awareness_time * 60.
         else:
           dp_enable_driver_monitoring = False

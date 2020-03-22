@@ -34,6 +34,7 @@ class LongitudinalMpc():
     self.prev_lead_status = False
     self.prev_lead_x = 0.0
     self.new_lead = False
+
     self.last_cloudlog_t = 0.0
 
     # df from Shane Smiskol

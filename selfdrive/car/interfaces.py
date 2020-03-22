@@ -6,10 +6,13 @@ from common.realtime import DT_CTRL
 from selfdrive.car import gen_empty_fingerprint
 from selfdrive.controls.lib.drive_helpers import EventTypes as ET, create_event
 from selfdrive.controls.lib.vehicle_model import VehicleModel
+
+# dp
 from common.realtime import sec_since_boot
 from common.params import Params
 params = Params()
 from selfdrive.dragonpilot.dragonconf import dp_get_last_modified
+
 
 GearShifter = car.CarState.GearShifter
 
@@ -128,10 +131,8 @@ class CarInterfaceBase():
       events.append(create_event('wrongCarMode', [ET.NO_ENTRY, ET.USER_DISABLE]))
     if cs_out.espDisabled:
       events.append(create_event('espDisabled', [ET.NO_ENTRY, ET.SOFT_DISABLE]))
-    if not self.dragon_toyota_stock_dsu:
-      if not self.dragon_allow_gas:
-        if cs_out.gasPressed:
-          events.append(create_event('pedalPressed', [ET.PRE_ENABLE]))
+    if cs_out.gasPressed and not self.dragon_toyota_stock_dsu and not self.dragon_allow_gas:
+      events.append(create_event('pedalPressed', [ET.PRE_ENABLE]))
 
     # TODO: move this stuff to the capnp strut
     if not self.dragon_lat_ctrl:
@@ -150,7 +151,7 @@ class CarInterfaceBase():
       # DragonAllowGas
       if not self.dragon_allow_gas:
         if (cs_out.gasPressed and (not self.gas_pressed_prev) and cs_out.vEgo > gas_resume_speed) or \
-                (cs_out.brakePressed and (not self.brake_pressed_prev or not cs_out.standstill)):
+            (cs_out.brakePressed and (not self.brake_pressed_prev or not cs_out.standstill)):
           events.append(create_event('pedalPressed', [ET.NO_ENTRY, ET.USER_DISABLE]))
       else:
         if cs_out.brakePressed and (not self.brake_pressed_prev or not cs_out.standstill):
