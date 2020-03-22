@@ -24,7 +24,10 @@ def main():
     if dp_last_modified != modified:
       enabled = True if params.get("DragonEnableAutoShutdown", encoding='utf8') == '1' else False
       if enabled:
-        secs = int(params.get("DragonAutoShutdownAt", encoding='utf8')) * 60
+        try:
+          secs = int(params.get("DragonAutoShutdownAt", encoding='utf8')) * 60
+        except (TypeError, ValueError):
+          secs = 0
       dp_last_modified = modified
 
     if last_enabled != enabled or last_secs != secs or started or usb_online:

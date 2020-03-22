@@ -420,8 +420,6 @@ def thermald_thread():
     fw_version_match_prev = fw_version_match
     should_start_prev = should_start
 
-    #print(msg)
-
     # dragonpilot
     ts = sec_since_boot()
     # update variable status every 10 secs
