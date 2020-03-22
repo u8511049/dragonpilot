@@ -95,9 +95,9 @@ static void ui_draw_sidebar_battery_text(UIState *s, bool hasSidebar) {
   const int battery_img_x = hasSidebar ? 150 : -(sbr_w);
   const int battery_img_y = 305;
 
-  char battery_str[6];
-  snprintf(battery_str, sizeof(battery_str), "%d%%", s->scene.batteryPercent);
-  nvgFillColor(s->vg, strcmp(s->scene.batteryStatus, "Charging") == 0? COLOR_GREEN : s->scene.batteryPercent <= 50? COLOR_YELLOW : s->scene.batteryPercent <= 15? COLOR_RED : COLOR_WHITE);
+  char battery_str[7];
+  snprintf(battery_str, sizeof(battery_str), "%d%%%s", s->scene.batteryPercent, strcmp(s->scene.batteryStatus, "Charging") == 0 ? "+" : "-");
+  nvgFillColor(s->vg, COLOR_WHITE);
   nvgFontSize(s->vg, 40);
   nvgFontFace(s->vg, "sans-regular");
   nvgTextAlign(s->vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
@@ -106,7 +106,7 @@ static void ui_draw_sidebar_battery_text(UIState *s, bool hasSidebar) {
 
 static void ui_draw_sidebar_network_type(UIState *s, bool hasSidebar) {
   const int network_x = hasSidebar ? 50 : -(sbr_w);
-  const int network_y = 273;
+  const int network_y = 303;
   const int network_w = 100;
   const int network_h = 100;
   const char *network_types[6] = {"--", "WiFi", "2G", "3G", "4G", "5G"};
