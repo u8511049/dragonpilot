@@ -19,31 +19,36 @@ def main():
   dp_last_modified = None
   while 1:
     cur_time = sec_since_boot()
-
-    modified = dp_get_last_modified()
-    if dp_last_modified != modified:
-      enabled = True if params.get("DragonEnableAutoShutdown", encoding='utf8') == '1' else False
-      if enabled:
-        try:
+    wday = int(time.strftime("%w", time.localtime()))
+    sdtime = int(time.strftime("%H%M", time.localtime()))
+    if cur_time - last_ts >= 10.:
+      modified = dp_get_last_modified()
+      if dp_last_modified != modified:
+        enabled = True if params.get("DragonEnableAutoShutdown", encoding='utf8') == '1' else False
+        if enabled or not enabled:
           secs = int(params.get("DragonAutoShutdownAt", encoding='utf8')) * 60
-        except (TypeError, ValueError):
-          secs = 0
-      dp_last_modified = modified
 
-    if last_enabled != enabled or last_secs != secs or started or usb_online:
-      shutdown_at = cur_time + secs
+        dp_last_modified = modified
 
-    if enabled:
-      msg = messaging.recv_sock(thermal_sock, wait=True)
-      started = msg.thermal.started
-      usb_online = msg.thermal.usbOnline
+      if enabled or not enabled:
+        msg = messaging.recv_sock(thermal_sock, wait=True)
+        started = msg.thermal.started
+        usb_online = msg.thermal.usbOnline
 
-      if not started and not usb_online and secs > 0 and cur_time >= shutdown_at:
-        os.system('LD_LIBRARY_PATH="" svc power shutdown')
+      if last_enabled != enabled or last_secs != secs or started or usb_online:
+        shutdown_at = cur_time + secs
 
-    last_enabled = enabled
-    last_secs = secs
+      last_enabled = enabled
+      last_secs = secs
+      last_ts = cur_time
 
+    if enabled and not started and not usb_online and secs > 0 and cur_time >= shutdown_at:
+      os.system('LD_LIBRARY_PATH="" svc power shutdown')
+      #05:00-19:00 don't shut down
+    elif not enabled and not started and not usb_online and cur_time >= shutdown_at and (sdtime >= 1900 or sdtime <= 500) and wday in [1,2,3,4,5]:
+      os.system('LD_LIBRARY_PATH="" svc power shutdown')
+    elif not enabled and not started and not usb_online and cur_time >= shutdown_at and wday in [0,6]:
+      os.system('LD_LIBRARY_PATH="" svc power shutdown')
     time.sleep(10)
 
 if __name__ == "__main__":
