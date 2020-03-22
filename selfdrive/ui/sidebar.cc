@@ -188,7 +188,7 @@ static void ui_draw_sidebar_storage_metric(UIState *s, bool hasSidebar) {
 
   snprintf(storage_value_str, sizeof(storage_value_str), "%d", (int)storage_pct);
   snprintf(storage_value_unit, sizeof(storage_value_unit), "%s", "%");
-  snprintf(storage_label_str, sizeof(storage_label_str), "%s", "存儲空間");
+  snprintf(storage_label_str, sizeof(storage_label_str), "%s", "儲存空間");
   strcat(storage_value_str, storage_value_unit);
 
   ui_draw_sidebar_metric(s, storage_label_str, storage_value_str, storage_severity, storage_y_offset, NULL, hasSidebar);
@@ -212,7 +212,7 @@ static void ui_draw_sidebar_temp_metric(UIState *s, bool hasSidebar) {
   }
 
   snprintf(temp_value_str, sizeof(temp_value_str), "%d", s->scene.paTemp);
-  snprintf(temp_value_unit, sizeof(temp_value_unit), "%s", "°C");
+  snprintf(temp_value_unit, sizeof(temp_value_unit), "%s", "℃");
   snprintf(temp_label_str, sizeof(temp_label_str), "%s", "溫度");
   strcat(temp_value_str, temp_value_unit);
 
