@@ -106,7 +106,7 @@ static void ui_draw_sidebar_battery_text(UIState *s, bool hasSidebar) {
 
 static void ui_draw_sidebar_network_type(UIState *s, bool hasSidebar) {
   const int network_x = hasSidebar ? 50 : -(sbr_w);
-  const int network_y = 303;
+  const int network_y = 273;
   const int network_w = 100;
   const int network_h = 100;
   const char *network_types[6] = {"--", "WiFi", "2G", "3G", "4G", "5G"};
