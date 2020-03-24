@@ -76,6 +76,8 @@ default_conf = {
   'DragonEnableSeatBeltCheck': '1',
   'DragonEnableGearCheck': '1',
   'DragonEnableTempMonitor': '1',
+  'DragonEnableCurvatureLearner': '0',
+  'DragonCurvatureLearnerOffset': '0.0',
 }
 
 deprecated_conf = {

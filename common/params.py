@@ -178,6 +178,8 @@ keys = {
   "DragonEnableSeatBeltCheck": [TxType.PERSISTENT],
   "DragonEnableGearCheck": [TxType.PERSISTENT],
   "DragonEnableTempMonitor": [TxType.PERSISTENT],
+  "DragonEnableCurvatureLearner": [TxType.PERSISTENT],
+  "DragonCurvatureLearnerOffset": [TxType.PERSISTENT],
 }
 
 
