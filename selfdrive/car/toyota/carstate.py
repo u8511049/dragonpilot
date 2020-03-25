@@ -132,6 +132,8 @@ class CarState(CarStateBase):
 
     if self.dragon_toyota_stock_dsu and ret.cruiseState.available:
       enable_acc = True
+      if ret.gearShifter in [car.CarState.GearShifter.reverse, car.CarState.GearShifter.park, car.CarState.GearShifter.neutral]:
+        enable_acc = False
       if ret.seatbeltUnlatched or ret.doorOpen:
         enable_acc = False
       ret.cruiseState.enabled = enable_acc
