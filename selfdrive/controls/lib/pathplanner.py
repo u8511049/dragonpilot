@@ -10,6 +10,7 @@ from common.params import Params, put_nonblocking
 import cereal.messaging as messaging
 from cereal import log
 # dragonpilot
+from common.numpy_fast import clip
 from selfdrive.dragonpilot.dragonconf import dp_get_last_modified
 
 LaneChangeState = log.PathPlan.LaneChangeState
