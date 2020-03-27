@@ -6,11 +6,11 @@ from selfdrive.controls.lib.lateral_mpc import libmpc_py
 from selfdrive.controls.lib.drive_helpers import MPC_COST_LAT
 from selfdrive.controls.lib.lane_planner import LanePlanner
 from selfdrive.config import Conversions as CV
-from common.params import Params
+from common.params import Params, put_nonblocking
 import cereal.messaging as messaging
 from cereal import log
 # dragonpilot
-from common.params import Params
+from common.numpy_fast import clip
 from selfdrive.dragonpilot.dragonconf import dp_get_last_modified
 
 LaneChangeState = log.PathPlan.LaneChangeState
@@ -75,6 +75,9 @@ class PathPlanner():
     self.dragon_auto_lc_delay = 2.
     self.last_ts = 0.
     self.dp_last_modified = None
+    self.dp_curvature_learner = False
+    self.dp_curvature_learner_offset = 0.
+    self.last_curvature_update = 0.
 
   def setup_mpc(self):
     self.libmpc = libmpc_py.libmpc
@@ -98,6 +101,14 @@ class PathPlanner():
     if cur_time - self.last_ts >= 5.:
       modified = dp_get_last_modified()
       if self.dp_last_modified != modified:
+        self.dp_curvature_learner = True if self.params.get("DragonEnableCurvatureLearner", encoding='utf8') == "1" else False
+        if self.dp_curvature_learner:
+          try:
+            self.dp_curvature_learner_offset = float(self.params.get("DragonCurvatureLearnerOffset", encoding='utf8'))
+          except (TypeError, ValueError):
+            self.dp_curvature_learner_offset = 0.
+        else:
+          self.dp_curvature_learner_offset = 0.
         self.lane_change_enabled = True if self.params.get("LaneChangeEnabled", encoding='utf8') == "1" else False
         if self.lane_change_enabled:
           self.dragon_auto_lc_enabled = True if self.params.get("DragonEnableAutoLC", encoding='utf8') == "1" else False
@@ -132,6 +143,9 @@ class PathPlanner():
           self.dragon_auto_lc_enabled = False
         self.dp_last_modified = modified
       self.last_ts = cur_time
+    if self.dp_curvature_learner and cur_time - self.last_curvature_update >= 120.:
+      put_nonblocking('DragonCurvatureLearnerOffset', str(self.dp_curvature_learner_offset))
+      self.last_curvature_update = cur_time
 
     v_ego = sm['carState'].vEgo
     angle_steers = sm['carState'].steeringAngle
@@ -142,7 +156,7 @@ class PathPlanner():
     # Run MPC
     self.angle_steers_des_prev = self.angle_steers_des_mpc
     VM.update_params(sm['liveParameters'].stiffnessFactor, sm['liveParameters'].steerRatio)
-    curvature_factor = VM.curvature_factor(v_ego)
+    curvature_factor = VM.curvature_factor(v_ego) + self.dp_curvature_learner_offset
 
     self.LP.parse_model(sm['model'])
 
@@ -237,6 +251,14 @@ class PathPlanner():
       self.libmpc.init_weights(MPC_COST_LAT.PATH, MPC_COST_LAT.LANE, MPC_COST_LAT.HEADING, self.steer_rate_cost)
 
     self.LP.update_d_poly(v_ego)
+
+    if self.dp_curvature_learner:
+      if active:
+        if angle_steers - angle_offset > 0.5:
+          self.dp_curvature_learner_offset -= self.LP.d_poly[3] / 12000
+        elif angle_steers - angle_offset < -0.5:
+          self.dp_curvature_learner_offset += self.LP.d_poly[3] / 12000
+      self.dp_curvature_learner_offset = clip(self.dp_curvature_learner_offset, -0.3, 0.3)
 
     # account for actuation delay
     self.cur_state = calc_states_after_delay(self.cur_state, v_ego, angle_steers - angle_offset, curvature_factor, VM.sR, CP.steerActuatorDelay)
