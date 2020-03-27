@@ -226,8 +226,10 @@ def log_fingerprinted(candidate):
 
 def log_unmatched_fingerprint(fingerprints, fw):
   while True:
-    crash.capture_warning("car doesn't match any fingerprints: %s" % fingerprints)
-    crash.capture_warning("car doesn't match any fw: %s" % fw)
+    if not bool(fingerprints):
+      crash.capture_warning("car doesn't match any fingerprints: %s" % fingerprints)
+    if not bool(fw):
+      crash.capture_warning("car doesn't match any fw: %s" % fw)
     break
 
 def get_car(logcan, sendcan, has_relay=False):
@@ -238,8 +240,10 @@ def get_car(logcan, sendcan, has_relay=False):
       y = threading.Thread(target=log_unmatched_fingerprint, args=(fingerprints,car_fw,))
       y.start()
 
-    cloudlog.warning("car doesn't match any fingerprints: %r", fingerprints)
-    cloudlog.warning("car doesn't match any fw: %s" % car_fw)
+    if not bool(fingerprints):
+      cloudlog.warning("car doesn't match any fingerprints: %r", fingerprints)
+    if not bool(fw):
+      cloudlog.warning("car doesn't match any fw: %s" % car_fw)
     candidate = "mock"
 
   if is_online():
