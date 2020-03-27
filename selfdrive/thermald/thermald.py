@@ -195,7 +195,7 @@ def thermald_thread():
     setup_eon_fan()
     handle_fan = handle_fan_eon
 
-  pm = PowerMonitoring()
+  pm = PowerMonitoring(is_uno)
   # dragonpilot
   ts_last_ip = None
   ts_last_update_vars = 0
