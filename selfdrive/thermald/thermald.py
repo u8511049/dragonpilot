@@ -216,17 +216,20 @@ def thermald_thread():
     if ts - ts_last_update_vars >= 10.:
       modified = dp_get_last_modified()
       if dp_last_modified != modified:
-        dragon_charging_ctrl = True if params.get('DragonChargingCtrl', encoding='utf8') == "1" else False
         dp_temp_monitor = True if params.get('DragonEnableTempMonitor', encoding='utf8') == "1" else False
-        if dragon_charging_ctrl:
-          try:
-            dragon_to_discharge = int(params.get('DragonCharging', encoding='utf8'))
-          except (TypeError, ValueError):
-            dragon_to_discharge = 70
-          try:
-            dragon_to_charge = int(params.get('DragonDisCharging', encoding='utf8'))
-          except (TypeError, ValueError):
-            dragon_to_charge = 60
+        if not is_uno:
+          dragon_charging_ctrl = True if params.get('DragonChargingCtrl', encoding='utf8') == "1" else False
+          if dragon_charging_ctrl:
+            try:
+              dragon_to_discharge = int(params.get('DragonCharging', encoding='utf8'))
+            except (TypeError, ValueError):
+              dragon_to_discharge = 70
+            try:
+              dragon_to_charge = int(params.get('DragonDisCharging', encoding='utf8'))
+            except (TypeError, ValueError):
+              dragon_to_charge = 60
+        else:
+          dragon_charging_ctrl = False
         dp_last_modified = modified
       ts_last_update_vars = ts
 

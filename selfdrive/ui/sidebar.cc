@@ -1,6 +1,14 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
+
+#include "common/util.h"
+#include "common/timing.h"
+#include "common/swaglog.h"
+#include "common/touch.h"
+#include "common/visionimg.h"
+#include "common/params.h"
+
 #include "ui.hpp"
 
 static void ui_draw_sidebar_background(UIState *s, bool hasSidebar) {
@@ -57,7 +65,7 @@ static void ui_draw_sidebar_ip_addr(UIState *s, bool hasSidebar) {
   const int network_ip_x = hasSidebar ? 58 : -(sbr_w);
   const int network_ip_y = 255;
 
-  char network_ip_str[20];
+  char network_ip_str[15];
   snprintf(network_ip_str, sizeof(network_ip_str), "%s", s->scene.ipAddr);
   nvgFillColor(s->vg, COLOR_WHITE);
   nvgFontSize(s->vg, 32);
@@ -91,7 +99,7 @@ static void ui_draw_sidebar_battery_icon(UIState *s, bool hasSidebar) {
 
 static void ui_draw_sidebar_battery_text(UIState *s, bool hasSidebar) {
   const int battery_img_h = 36;
-  const int battery_img_w = 76;
+  const int battery_img_w = 96;
   const int battery_img_x = hasSidebar ? 150 : -(sbr_w);
   const int battery_img_y = 305;
 
