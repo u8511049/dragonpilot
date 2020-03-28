@@ -242,7 +242,7 @@ def get_car(logcan, sendcan, has_relay=False):
 
     if not bool(fingerprints):
       cloudlog.warning("car doesn't match any fingerprints: %r", fingerprints)
-    if not bool(fw):
+    if not bool(car_fw):
       cloudlog.warning("car doesn't match any fw: %s" % car_fw)
     candidate = "mock"
 
