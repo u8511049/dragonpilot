@@ -87,7 +87,7 @@ static int toyota_rx_hook(CAN_FIFOMailBox_TypeDef *to_push) {
       // 5th bit is CRUISE_ACTIVE
       int cruise_engaged = GET_BYTE(to_push, 0) & 0x20;
       if (!cruise_engaged) {
-        controls_allowed = 1;
+        controls_allowed = 0;
       }
       if (cruise_engaged && !toyota_cruise_engaged_last) {
         controls_allowed = 1;
@@ -112,7 +112,7 @@ static int toyota_rx_hook(CAN_FIFOMailBox_TypeDef *to_push) {
       int byte = (addr == 0x224) ? 0 : 4;
       bool brake_pressed = ((GET_BYTE(to_push, byte) >> 5) & 1) != 0;
       if (brake_pressed && (!brake_pressed_prev || toyota_moving)) {
-        controls_allowed = 1;
+        controls_allowed = 0;
       }
       brake_pressed_prev = brake_pressed;
     }

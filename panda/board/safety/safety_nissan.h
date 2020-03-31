@@ -64,7 +64,7 @@ static int nissan_rx_hook(CAN_FIFOMailBox_TypeDef *to_push) {
       if (addr == 0x15c) {
         bool gas_pressed = ((GET_BYTE(to_push, 5) << 2) | ((GET_BYTE(to_push, 6) >> 6) & 0x3));
         if (gas_pressed && !gas_pressed_prev) {
-          controls_allowed = 0;
+          controls_allowed = 1;
         }
         gas_pressed_prev = gas_pressed;
       }

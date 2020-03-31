@@ -56,7 +56,7 @@ static int hyundai_rx_hook(CAN_FIFOMailBox_TypeDef *to_push) {
     if (addr == 608) {
       bool gas_pressed = (GET_BYTE(to_push, 7) >> 6) != 0;
       if (gas_pressed && !gas_pressed_prev) {
-        controls_allowed = 0;
+        controls_allowed = 1;
       }
       gas_pressed_prev = gas_pressed;
     }
