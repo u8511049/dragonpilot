@@ -136,6 +136,8 @@ class CarState(CarStateBase):
         enable_acc = False
       if ret.seatbeltUnlatched or ret.doorOpen:
         enable_acc = False
+      if ret.brakePressed:
+        enable_acc = False
       ret.cruiseState.enabled = enable_acc
 
     return ret
