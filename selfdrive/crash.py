@@ -1,14 +1,16 @@
 """Install exception handler for process crash."""
 import os
 import sys
-import json
-#from subprocess import check_output
 import threading
-from selfdrive.version import version, dirty
+import capnp
+from common.params import Params
+from selfdrive.version import version, dirty, origin, branch
+uniqueID = Params().get('DongleId', None)
 
 from selfdrive.swaglog import cloudlog
+from common.android import ANDROID
 
-if os.getenv("NOLOG") or os.getenv("NOCRASH"):
+if os.getenv("NOLOG") or os.getenv("NOCRASH") or not ANDROID:
   def capture_exception(*exc_info):
     pass
   def bind_user(**kwargs):
@@ -20,46 +22,32 @@ if os.getenv("NOLOG") or os.getenv("NOCRASH"):
 else:
   from raven import Client
   from raven.transport.http import HTTPTransport
-
-  error_tags = {'dirty': dirty, 'username': 'char_error'}
-
+  params = Params()
   try:
-    with open("/data/data/ai.comma.plus.offroad/files/persistStore/persist-auth", "r") as f:
-      auth = json.loads(f.read())
-    auth = json.loads(auth['commaUser'])
-    tags = ['username', 'email']
-    for tag in tags:
-      try:
-        error_tags[tag] = ''.join(char for char in auth[tag].decode('utf-8', 'ignore') if char.isalnum())
-      except:
-        pass
-  except:
-    pass
-
-  logging_data = {"branch": "/data/params/d/GitBranch", "commit": "/data/params/d/GitCommit", "remote": "/data/params/d/GitRemote"}
-
-  for key in logging_data:
-    try:
-      with open(logging_data[key], "r") as f:
-        error_tags[key] = str(f.read())
-    except:
-      error_tags[key] = "unknown"
+    dongle_id = params.get("DongleId").decode('utf8')
+  except AttributeError:
+    dongle_id = "None"
+  error_tags = {'dirty': dirty, 'username': uniqueID, 'dongle_id': dongle_id, 'branch': branch, 'remote': origin}
 
   client = Client('https://980a0cba712a4c3593c33c78a12446e1:fecab286bcaf4dba8b04f7cff0188e2d@sentry.io/1488600',
                   install_sys_hook=False, transport=HTTPTransport, release=version, tags=error_tags)
 
-  def capture_warning(warning_string):
-    client.captureMessage(warning_string, level='warning')
-
-  def capture_info(info_string):
-    client.captureMessage(info_string, level='info')
-
   def capture_exception(*args, **kwargs):
-    client.captureException(*args, **kwargs)
+    exc_info = sys.exc_info()
+    if not exc_info[0] is capnp.lib.capnp.KjException:
+      client.captureException(*args, **kwargs)
     cloudlog.error("crash", exc_info=kwargs.get('exc_info', 1))
 
   def bind_user(**kwargs):
     client.user_context(kwargs)
+
+  def capture_warning(warning_string):
+    bind_user(id=dongle_id)
+    client.captureMessage(warning_string, level='warning')
+
+  def capture_info(info_string):
+    bind_user(id=dongle_id)
+    client.captureMessage(info_string, level='info')
 
   def bind_extra(**kwargs):
     client.extra_context(kwargs)

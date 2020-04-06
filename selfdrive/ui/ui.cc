@@ -6,11 +6,9 @@
 #include <sys/mman.h>
 #include <sys/resource.h>
 
-#include <json.h>
 #include <czmq.h>
 
 #include "common/util.h"
-#include "common/messaging.h"
 #include "common/timing.h"
 #include "common/swaglog.h"
 #include "common/touch.h"
@@ -57,6 +55,45 @@ static void set_awake(UIState *s, bool awake) {
   // computer UI doesn't sleep
   s->awake = true;
 #endif
+}
+
+static void navigate_to_settings(UIState *s) {
+#ifdef QCOM
+  system("am broadcast -a 'ai.comma.plus.SidebarSettingsTouchUpInside'");
+#else
+  // computer UI doesn't have offroad settings
+#endif
+}
+
+static void navigate_to_home(UIState *s) {
+#ifdef QCOM
+  system("am broadcast -a 'ai.comma.plus.HomeButtonTouchUpInside'");
+#else
+  // computer UI doesn't have offroad home
+#endif
+}
+
+static void handle_sidebar_touch(UIState *s, int touch_x, int touch_y) {
+  if (!s->scene.uilayout_sidebarcollapsed && touch_x <= sbr_w) {
+    if (touch_x >= settings_btn_x && touch_x < (settings_btn_x + settings_btn_w)
+      && touch_y >= settings_btn_y && touch_y < (settings_btn_y + settings_btn_h)) {
+      navigate_to_settings(s);
+    }
+    if (touch_x >= home_btn_x && touch_x < (home_btn_x + home_btn_w)
+      && touch_y >= home_btn_y && touch_y < (home_btn_y + home_btn_h)) {
+      navigate_to_home(s);
+      if (s->vision_connected) {
+        s->scene.uilayout_sidebarcollapsed = true;
+      }
+    }
+  }
+}
+
+static void handle_vision_touch(UIState *s, int touch_x, int touch_y) {
+  if (s->vision_connected && (touch_x >= s->scene.ui_viz_rx - bdr_s)
+    && (s->active_app != cereal_UiLayoutState_App_settings)) {
+    s->scene.uilayout_sidebarcollapsed = !s->scene.uilayout_sidebarcollapsed;
+  }
 }
 
 volatile sig_atomic_t do_exit = 0;
@@ -112,6 +149,9 @@ static void ui_init(UIState *s) {
   s->uilayout_sock = SubSocket::create(s->ctx, "uiLayoutState");
   s->livecalibration_sock = SubSocket::create(s->ctx, "liveCalibration");
   s->radarstate_sock = SubSocket::create(s->ctx, "radarState");
+  s->thermal_sock = SubSocket::create(s->ctx, "thermal");
+  s->health_sock = SubSocket::create(s->ctx, "health");
+  s->ubloxgnss_sock = SubSocket::create(s->ctx, "ubloxGnss");
   s->carstate_sock = SubSocket::create(s->ctx, "carState");
 
   assert(s->model_sock != NULL);
@@ -119,6 +159,9 @@ static void ui_init(UIState *s) {
   assert(s->uilayout_sock != NULL);
   assert(s->livecalibration_sock != NULL);
   assert(s->radarstate_sock != NULL);
+  assert(s->thermal_sock != NULL);
+  assert(s->health_sock != NULL);
+  assert(s->ubloxgnss_sock != NULL);
   assert(s->carstate_sock != NULL);
 
   s->poller = Poller::create({
@@ -127,13 +170,16 @@ static void ui_init(UIState *s) {
                               s->uilayout_sock,
                               s->livecalibration_sock,
                               s->radarstate_sock,
+                              s->thermal_sock,
+                              s->health_sock,
+                              s->ubloxgnss_sock,
                               s->carstate_sock
                              });
 
 #ifdef SHOW_SPEEDLIMIT
-  s->map_data_sock = SubSock::create(s->ctx, "liveMapData");
+  s->map_data_sock = SubSocket::create(s->ctx, "liveMapData");
   assert(s->map_data_sock != NULL);
-  s->poller.registerSocket(s->map_data_sock);
+  s->poller->registerSocket(s->map_data_sock);
 #endif
 
   s->ipc_fd = -1;
@@ -215,6 +261,7 @@ static void ui_init_vision(UIState *s, const VisionStreamBufs back_bufs,
     s->dragon_ui_lead = false;
     s->dragon_ui_path = false;
     s->dragon_ui_blinker = false;
+    s->dragon_ui_dm_view = false;
   } else {
     read_param_bool(&s->dragon_ui_speed, "DragonUISpeed");
     read_param_bool(&s->dragon_ui_event, "DragonUIEvent");
@@ -228,6 +275,7 @@ static void ui_init_vision(UIState *s, const VisionStreamBufs back_bufs,
     read_param_bool(&s->dragon_ui_lead, "DragonUILead");
     read_param_bool(&s->dragon_ui_path, "DragonUIPath");
     read_param_bool(&s->dragon_ui_blinker, "DragonUIBlinker");
+    read_param_bool(&s->dragon_ui_dm_view, "DragonUIDMView");
   }
 
 
@@ -237,20 +285,21 @@ static void ui_init_vision(UIState *s, const VisionStreamBufs back_bufs,
   s->limit_set_speed_timeout = UI_FREQ;
 
   // dragonpilot, 1hz
-  s->dragon_ui_speed_timeout = UI_FREQ * 3.1;
-  s->dragon_ui_event_timeout = UI_FREQ * 3.2;
-  s->dragon_ui_maxspeed_timeout = UI_FREQ * 3.3;
-  s->dragon_ui_face_timeout = UI_FREQ * 3.4;
-  s->dragon_ui_dev_timeout = UI_FREQ * 3.5;
-  s->dragon_ui_dev_mini_timeout = UI_FREQ * 3.6;
-  s->dragon_enable_dashcam_timeout = UI_FREQ * 3.7;
-  s->dragon_ui_volume_boost_timeout = UI_FREQ * 3.8;
-  s->dragon_driving_ui_timeout = UI_FREQ * 3.9;
-  s->dragon_ui_lane_timeout = UI_FREQ * 4.0;
-  s->dragon_ui_lead_timeout = UI_FREQ * 4.1;
-  s->dragon_ui_path_timeout = UI_FREQ * 4.2;
-  s->dragon_ui_blinker_timeout = UI_FREQ * 4.3;
-  s->dragon_waze_mode_timeout = UI_FREQ * 4.4;
+  s->dragon_ui_speed_timeout = UI_FREQ * 5.1;
+  s->dragon_ui_event_timeout = UI_FREQ * 5.2;
+  s->dragon_ui_maxspeed_timeout = UI_FREQ * 5.3;
+  s->dragon_ui_face_timeout = UI_FREQ * 5.4;
+  s->dragon_ui_dev_timeout = UI_FREQ * 5.5;
+  s->dragon_ui_dev_mini_timeout = UI_FREQ * 5.6;
+  s->dragon_enable_dashcam_timeout = UI_FREQ * 5.7;
+  s->dragon_ui_volume_boost_timeout = UI_FREQ * 5.8;
+  s->dragon_driving_ui_timeout = UI_FREQ * 5.9;
+  s->dragon_ui_lane_timeout = UI_FREQ * 6.0;
+  s->dragon_ui_lead_timeout = UI_FREQ * 6.1;
+  s->dragon_ui_path_timeout = UI_FREQ * 6.2;
+  s->dragon_ui_blinker_timeout = UI_FREQ * 6.3;
+  s->dragon_waze_mode_timeout = UI_FREQ * 6.4;
+  s->dragon_ui_dm_view_timeout = UI_FREQ * 6.5;
 }
 
 static PathData read_path(cereal_ModelData_PathData_ptr pathp) {
@@ -417,6 +466,11 @@ void handle_message(UIState *s, Message * msg) {
     s->scene.lead_d_rel = leaddatad.dRel;
     s->scene.lead_y_rel = leaddatad.yRel;
     s->scene.lead_v_rel = leaddatad.vRel;
+    cereal_read_RadarState_LeadData(&leaddatad, datad.leadTwo);
+    s->scene.lead_status2 = leaddatad.status;
+    s->scene.lead_d_rel2 = leaddatad.dRel;
+    s->scene.lead_y_rel2 = leaddatad.yRel;
+    s->scene.lead_v_rel2 = leaddatad.vRel;
     s->livempc_or_radarstate_changed = true;
   } else if (eventd.which == cereal_Event_liveCalibration) {
     s->scene.world_objects_visible = true;
@@ -455,23 +509,36 @@ void handle_message(UIState *s, Message * msg) {
     cereal_read_UiLayoutState(&datad, eventd.uiLayoutState);
     s->active_app = datad.activeApp;
     s->scene.uilayout_sidebarcollapsed = datad.sidebarCollapsed;
-    s->scene.uilayout_mapenabled = datad.mapEnabled;
-
-    bool hasSidebar = !s->scene.uilayout_sidebarcollapsed;
-    bool mapEnabled = s->scene.uilayout_mapenabled;
-    if (mapEnabled) {
-      s->scene.ui_viz_rx = hasSidebar ? (box_x+nav_w) : (box_x+nav_w-(bdr_s*4));
-      s->scene.ui_viz_rw = hasSidebar ? (box_w-nav_w) : (box_w-nav_w+(bdr_s*4));
-      s->scene.ui_viz_ro = -(sbr_w + 4*bdr_s);
-    } else {
-      s->scene.ui_viz_rx = hasSidebar ? box_x : (box_x-sbr_w+bdr_s*2);
-      s->scene.ui_viz_rw = hasSidebar ? box_w : (box_w+sbr_w-(bdr_s*2));
-      s->scene.ui_viz_ro = hasSidebar ? -(sbr_w - 6*bdr_s) : 0;
-    }
   } else if (eventd.which == cereal_Event_liveMapData) {
     struct cereal_LiveMapData datad;
     cereal_read_LiveMapData(&datad, eventd.liveMapData);
     s->scene.map_valid = datad.mapValid;
+  } else if (eventd.which == cereal_Event_thermal) {
+    struct cereal_ThermalData datad;
+    cereal_read_ThermalData(&datad, eventd.thermal);
+
+    s->scene.networkType = datad.networkType;
+    s->scene.networkStrength = datad.networkStrength;
+    s->scene.batteryPercent = datad.batteryPercent;
+    snprintf(s->scene.batteryStatus, sizeof(s->scene.batteryStatus), "%s", datad.batteryStatus.str);
+    s->scene.freeSpace = datad.freeSpace;
+    s->scene.thermalStatus = datad.thermalStatus;
+    s->scene.paTemp = datad.pa0;
+    snprintf(s->scene.ipAddr, sizeof(s->scene.ipAddr), "%s", datad.ipAddr.str);
+  } else if (eventd.which == cereal_Event_ubloxGnss) {
+    struct cereal_UbloxGnss datad;
+    cereal_read_UbloxGnss(&datad, eventd.ubloxGnss);
+    if (datad.which == cereal_UbloxGnss_measurementReport) {
+      struct cereal_UbloxGnss_MeasurementReport reportdatad;
+      cereal_read_UbloxGnss_MeasurementReport(&reportdatad, datad.measurementReport);
+      s->scene.satelliteCount = reportdatad.numMeas;
+    }
+  } else if (eventd.which == cereal_Event_health) {
+    struct cereal_HealthData datad;
+    cereal_read_HealthData(&datad, eventd.health);
+
+    s->scene.hwType = datad.hwType;
+    s->hardware_timeout = 5*30; // 5 seconds at 30 fps
   } else if (eventd.which == cereal_Event_carState) {
     struct cereal_CarState datad;
     cereal_read_CarState(&datad, eventd.carState);
@@ -481,8 +548,27 @@ void handle_message(UIState *s, Message * msg) {
     }
     s->scene.leftBlinker = datad.leftBlinker;
     s->scene.rightBlinker = datad.rightBlinker;
+    s->scene.brakeLights = datad.brakeLights;
   }
   capn_free(&ctx);
+}
+
+static void check_messages(UIState *s) {
+  while(true) {
+    auto polls = s->poller->poll(0);
+
+    if (polls.size() == 0)
+      break;
+
+    for (auto sock : polls){
+      Message * msg = sock->receive();
+      if (msg == NULL) continue;
+
+      handle_message(s, msg);
+
+      delete msg;
+    }
+  }
 }
 
 static void ui_update(UIState *s) {
@@ -554,7 +640,7 @@ static void ui_update(UIState *s) {
 
     assert(glGetError() == GL_NO_ERROR);
 
-    // Default UI Measurements (Assumes sidebar collapsed)
+    s->scene.uilayout_sidebarcollapsed = true;
     s->scene.ui_viz_rx = (box_x-sbr_w+bdr_s*2);
     s->scene.ui_viz_rw = (box_w+sbr_w-(bdr_s*2));
     s->scene.ui_viz_ro = 0;
@@ -580,9 +666,9 @@ static void ui_update(UIState *s) {
       int ret = zmq_poll(polls, 1, 1000);
     #endif
     if (ret < 0) {
-      if (errno == EINTR) continue;
+      if (errno == EINTR || errno == EAGAIN) continue;
 
-      LOGW("poll failed (%d)", ret);
+      LOGE("poll failed (%d - %d)", ret, errno);
       close(s->ipc_fd);
       s->ipc_fd = -1;
       s->vision_connected = false;
@@ -635,23 +721,7 @@ static void ui_update(UIState *s) {
     break;
   }
   // peek and consume all events in the zmq queue, then return.
-  while(true) {
-    auto polls = s->poller->poll(0);
-
-    if (polls.size() == 0)
-      return;
-
-    for (auto sock : polls){
-      Message * msg = sock->receive();
-      if (msg == NULL) continue;
-
-      set_awake(s, true);
-
-      handle_message(s, msg);
-
-      delete msg;
-    }
-  }
+  check_messages(s);
 }
 
 static int vision_subscribe(int fd, VisionPacket *rp, VisionStreamType type) {
@@ -792,7 +862,6 @@ fail:
   return NULL;
 }
 
-
 static void* bg_thread(void* args) {
   UIState *s = (UIState*)args;
   set_thread_name("bg");
@@ -873,7 +942,6 @@ int main(int argc, char* argv[]) {
   TouchState touch = {0};
   touch_init(&touch);
   s->touch_fd = touch.fd;
-
   ui_sound_init();
 
   // light sensor scaling params
@@ -890,6 +958,9 @@ int main(int argc, char* argv[]) {
   set_volume(MIN_VOLUME);
   s->volume_timeout = 5 * UI_FREQ;
   int draws = 0;
+
+  s->scene.satelliteCount = -1;
+
   while (!do_exit) {
     bool should_swap = false;
     if (!s->vision_connected) {
@@ -907,34 +978,42 @@ int main(int argc, char* argv[]) {
     if (smooth_brightness > 255) smooth_brightness = 255;
     set_brightness(s, (int)smooth_brightness);
 
-    if (!s->vision_connected) {
-      // Car is not started, keep in idle state and awake on touch events
-      zmq_pollitem_t polls[1] = {{0}};
-      polls[0].fd = s->touch_fd;
-      polls[0].events = ZMQ_POLLIN;
-      int ret = zmq_poll(polls, 1, 0);
-      if (ret < 0){
-        if (errno == EINTR) continue;
-        LOGW("poll failed (%d)", ret);
-      } else if (ret > 0) {
-        // awake on any touch
-        int touch_x = -1, touch_y = -1;
-        int touched = touch_read(&touch, &touch_x, &touch_y);
-        if (touched == 1) {
-          set_awake(s, true);
-        }
+    // resize vision for collapsing sidebar
+    const bool hasSidebar = !s->scene.uilayout_sidebarcollapsed;
+    s->scene.ui_viz_rx = hasSidebar ? box_x : (box_x - sbr_w + (bdr_s * 2));
+    s->scene.ui_viz_rw = hasSidebar ? box_w : (box_w + sbr_w - (bdr_s * 2));
+    s->scene.ui_viz_ro = hasSidebar ? -(sbr_w - 6 * bdr_s) : 0;
+
+    if (s->vision_connected && s->dragon_waze_mode) {
+      // always collapsed sidebar when vision is connect and in waze mode
+      s->scene.uilayout_sidebarcollapsed = true;
+    } else {
+      // poll for touch events
+      int touch_x = -1, touch_y = -1;
+      int touched = touch_poll(&touch, &touch_x, &touch_y, 0);
+      if (touched == 1) {
+        set_awake(s, true);
+        handle_sidebar_touch(s, touch_x, touch_y);
+        handle_vision_touch(s, touch_x, touch_y);
       }
+    }
+
+    if (!s->vision_connected) {
       if (s->status != STATUS_STOPPED) {
         update_status(s, STATUS_STOPPED);
       }
+      check_messages(s);
     } else {
+      set_awake(s, true);
       if (s->status == STATUS_STOPPED) {
         update_status(s, STATUS_DISENGAGED);
       }
       // Car started, fetch a new rgb image from ipc and peek for zmq events.
       ui_update(s);
-      if(!s->vision_connected) {
+      if (!s->vision_connected) {
         // Visiond process is just stopped, force a redraw to make screen blank again.
+        s->scene.satelliteCount = -1;
+        s->scene.uilayout_sidebarcollapsed = false;
         ui_draw(s);
         glFinish();
         should_swap = true;
@@ -948,8 +1027,15 @@ int main(int argc, char* argv[]) {
       set_awake(s, false);
     }
 
-    // Don't waste resources on drawing in case screen is off or car is not started.
-    if (s->awake && s->vision_connected) {
+    // manage hardware disconnect
+    if (s->hardware_timeout > 0) {
+      s->hardware_timeout--;
+    } else {
+      s->scene.hwType = cereal_HealthData_HwType_unknown;
+    }
+
+    // Don't waste resources on drawing in case screen is off
+    if (s->awake) {
       ui_draw(s);
       glFinish();
       should_swap = true;
@@ -1018,6 +1104,7 @@ int main(int argc, char* argv[]) {
       s->dragon_ui_lead = false;
       s->dragon_ui_path = false;
       s->dragon_ui_blinker = false;
+      s->dragon_ui_dm_view = false;
     } else {
       read_param_bool_timeout(&s->dragon_ui_speed, "DragonUISpeed", &s->dragon_ui_speed_timeout);
       read_param_bool_timeout(&s->dragon_ui_event, "DragonUIEvent", &s->dragon_ui_event_timeout);
@@ -1031,6 +1118,7 @@ int main(int argc, char* argv[]) {
       read_param_bool_timeout(&s->dragon_ui_lead, "DragonUILead", &s->dragon_ui_lead_timeout);
       read_param_bool_timeout(&s->dragon_ui_path, "DragonUIPath", &s->dragon_ui_path_timeout);
       read_param_bool_timeout(&s->dragon_ui_blinker, "DragonUIBlinker", &s->dragon_ui_blinker_timeout);
+      read_param_bool_timeout(&s->dragon_ui_dm_view, "DragonUIDMView", &s->dragon_ui_dm_view_timeout);
     }
 
     pthread_mutex_unlock(&s->lock);

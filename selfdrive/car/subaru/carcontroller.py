@@ -3,7 +3,9 @@ from selfdrive.car import apply_std_steer_torque_limits
 from selfdrive.car.subaru import subarucan
 from selfdrive.car.subaru.values import DBC
 from opendbc.can.packer import CANPacker
-
+from common.params import Params
+params = Params()
+from selfdrive.dragonpilot.dragonconf import dp_get_last_modified
 
 class CarControllerParams():
   def __init__(self, car_fingerprint):
@@ -18,22 +20,42 @@ class CarControllerParams():
 
 
 class CarController():
-  def __init__(self, car_fingerprint):
+  def __init__(self, dbc_name, CP, VM):
     self.lkas_active = False
-    self.steer_idx = 0
     self.apply_steer_last = 0
-    self.car_fingerprint = car_fingerprint
     self.es_distance_cnt = -1
     self.es_lkas_cnt = -1
     self.steer_rate_limited = False
 
     # Setup detection helper. Routes commands to
     # an appropriate CAN bus number.
-    self.params = CarControllerParams(car_fingerprint)
-    self.packer = CANPacker(DBC[car_fingerprint]['pt'])
+    self.params = CarControllerParams(CP.carFingerprint)
+    self.packer = CANPacker(DBC[CP.carFingerprint]['pt'])
+
+    # dragonpilot
+    self.turning_signal_timer = 0
+    self.dragon_enable_steering_on_signal = False
+    self.dragon_lat_ctrl = True
+    self.dp_last_modified = None
+    self.lane_change_enabled = True
 
   def update(self, enabled, CS, frame, actuators, pcm_cancel_cmd, visual_alert, left_line, right_line):
     """ Controls thread """
+
+    # dragonpilot, don't check for param too often as it's a kernel call
+    if frame % 500 == 0:
+      modified = dp_get_last_modified()
+      if self.dp_last_modified != modified:
+        self.dragon_lat_ctrl = False if params.get("DragonLatCtrl", encoding='utf8') == "0" else True
+        if self.dragon_lat_ctrl:
+          self.lane_change_enabled = False if params.get("LaneChangeEnabled", encoding='utf8') == "1" else False
+          if not self.lane_change_enabled:
+            self.dragon_enable_steering_on_signal = True if params.get("DragonEnableSteeringOnSignal", encoding='utf8') == "1" else False
+          else:
+            self.dragon_enable_steering_on_signal = False
+        else:
+          self.dragon_enable_steering_on_signal = False
+        self.dp_last_modified = modified
 
     P = self.params
 
@@ -50,13 +72,30 @@ class CarController():
       # limits due to driver torque
 
       new_steer = int(round(apply_steer))
-      apply_steer = apply_std_steer_torque_limits(new_steer, self.apply_steer_last, CS.steer_torque_driver, P)
+      apply_steer = apply_std_steer_torque_limits(new_steer, self.apply_steer_last, CS.out.steeringTorque, P)
       self.steer_rate_limited = new_steer != apply_steer
 
-      lkas_enabled = enabled and not CS.steer_not_allowed
+      lkas_enabled = enabled
 
       if not lkas_enabled:
         apply_steer = 0
+
+      # dragonpilot
+      if enabled:
+        if self.dragon_enable_steering_on_signal:
+          if not CS.out.leftBlinker and not CS.out.rightBlinker:
+            self.turning_signal_timer = 0
+          else:
+            self.turning_signal_timer = 100
+
+          if self.turning_signal_timer > 0:
+            self.turning_signal_timer -= 1
+            apply_steer = 0
+        else:
+          self.turning_signal_timer = 0
+
+        if not self.dragon_lat_ctrl:
+          apply_steer = 0
 
       can_sends.append(subarucan.create_steering_control(self.packer, CS.CP.carFingerprint, apply_steer, frame, P.STEER_STEP))
 

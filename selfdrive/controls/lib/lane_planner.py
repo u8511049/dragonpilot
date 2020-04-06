@@ -71,14 +71,17 @@ class LanePlanner():
     self.l_prob = md.leftLane.prob  # left line prob
     self.r_prob = md.rightLane.prob  # right line prob
 
-    if len(md.meta.desirePrediction):
-      self.l_lane_change_prob = md.meta.desirePrediction[log.PathPlan.Desire.laneChangeLeft - 1]
-      self.r_lane_change_prob = md.meta.desirePrediction[log.PathPlan.Desire.laneChangeRight - 1]
+    if len(md.meta.desireState):
+      self.l_lane_change_prob = md.meta.desireState[log.PathPlan.Desire.laneChangeLeft - 1]
+      self.r_lane_change_prob = md.meta.desireState[log.PathPlan.Desire.laneChangeRight - 1]
 
   def update_d_poly(self, v_ego):
     ts = sec_since_boot()
-    if ts - self.ts_last_check > 5.:
-      self.camera_offset = int(params.get("DragonCameraOffset", encoding='utf8')) * 0.01
+    if ts - self.ts_last_check >= 5.:
+      try:
+        self.camera_offset = int(params.get("DragonCameraOffset", encoding='utf8')) * 0.01
+      except (TypeError, ValueError):
+        self.camera_offset = CAMERA_OFFSET
       self.ts_last_check = ts
     # only offset left and right lane lines; offsetting p_poly does not make sense
     self.l_poly[3] += self.camera_offset

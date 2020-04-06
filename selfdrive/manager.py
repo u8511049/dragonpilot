@@ -10,12 +10,12 @@ import subprocess
 import datetime
 from selfdrive.dragonpilot.dragonconf import dragonpilot_set_params
 
-from common.basedir import BASEDIR
+from common.basedir import BASEDIR, PARAMS
 from common.android import ANDROID
 sys.path.append(os.path.join(BASEDIR, "pyextra"))
 os.environ['BASEDIR'] = BASEDIR
 
-TOTAL_SCONS_NODES = 1170
+TOTAL_SCONS_NODES = 1195
 prebuilt = os.path.exists(os.path.join(BASEDIR, 'prebuilt'))
 
 # Create folders needed for msgq
@@ -23,6 +23,8 @@ try:
   os.mkdir("/dev/shm")
 except FileExistsError:
   pass
+except PermissionError:
+  print("WARNING: failed to make /dev/shm")
 
 if ANDROID:
   os.chmod("/dev/shm", 0o777)
@@ -55,7 +57,10 @@ def unblock_stdout():
       except (OSError, IOError, UnicodeDecodeError):
         pass
 
-    os._exit(os.wait()[1])
+    # os.wait() returns a tuple with the pid and a 16 bit value
+    # whose low byte is the signal number and whose high byte is the exit satus
+    exit_status = os.wait()[1] >> 8
+    os._exit(exit_status)
 
 
 if __name__ == "__main__":
@@ -125,21 +130,24 @@ from selfdrive.version import version, dirty
 from selfdrive.loggerd.config import ROOT
 from selfdrive.launcher import launcher
 from common import android
-from common.apk import update_apks, pm_apply_packages, start_frame
+from common.apk import update_apks, pm_apply_packages, start_offroad
+from common.manager_helpers import print_cpu_usage
 
 ThermalStatus = cereal.log.ThermalData.ThermalStatus
 
 # comment out anything you don't want to run
 managed_processes = {
-  "thermald": "selfdrive.thermald",
+  "thermald": "selfdrive.thermald.thermald",
   "uploader": "selfdrive.loggerd.uploader",
   "deleter": "selfdrive.loggerd.deleter",
   "controlsd": "selfdrive.controls.controlsd",
   "plannerd": "selfdrive.controls.plannerd",
   "radard": "selfdrive.controls.radard",
+  "dmonitoringd": "selfdrive.controls.dmonitoringd",
   "ubloxd": ("selfdrive/locationd", ["./ubloxd"]),
   "loggerd": ("selfdrive/loggerd", ["./loggerd"]),
   "logmessaged": "selfdrive.logmessaged",
+  "locationd": "selfdrive.locationd.locationd",
   "tombstoned": "selfdrive.tombstoned",
   "logcatd": ("selfdrive/logcatd", ["./logcatd"]),
   "proclogd": ("selfdrive/proclogd", ["./proclogd"]),
@@ -153,7 +161,7 @@ managed_processes = {
   "clocksd": ("selfdrive/clocksd", ["./clocksd"]),
   "gpsd": ("selfdrive/sensord", ["./gpsd"]),
   "updated": "selfdrive.updated",
-  "monitoringd": ("selfdrive/modeld", ["./monitoringd"]),
+  "dmonitoringmodeld": ("selfdrive/modeld", ["./dmonitoringmodeld"]),
   "modeld": ("selfdrive/modeld", ["./modeld"]),
   "dashcamd": "selfdrive.dragonpilot.dashcamd.dashcamd",
   "shutdownd": "selfdrive.dragonpilot.shutdownd.shutdownd",
@@ -200,19 +208,21 @@ car_started_processes = [
   'plannerd',
   'loggerd',
   'radard',
+  'dmonitoringd',
   'calibrationd',
   'paramsd',
   'camerad',
   'modeld',
   'proclogd',
   'ubloxd',
+  'locationd',
 ]
 if ANDROID:
   car_started_processes += [
     'sensord',
     'clocksd',
     'gpsd',
-    'monitoringd',
+    'dmonitoringmodeld',
     'deleter',
     'dashcamd',
   ]
@@ -253,14 +263,16 @@ def start_managed_process(name):
 def start_daemon_process(name):
   params = Params()
   proc, pid_param = daemon_processes[name]
-  pid = params.get(pid_param)
+  pid = params.get(pid_param, encoding='utf-8')
 
   if pid is not None:
     try:
       os.kill(int(pid), 0)
-      # process is running (kill is a poorly-named system call)
-      return
-    except OSError:
+      with open(f'/proc/{pid}/cmdline') as f:
+        if proc in f.read():
+          # daemon is running
+          return
+    except (OSError, FileNotFoundError):
       # process is dead
       pass
 
@@ -290,6 +302,15 @@ def prepare_managed_process(p):
       subprocess.check_call(["make", "clean"], cwd=os.path.join(BASEDIR, proc[0]))
       subprocess.check_call(["make", "-j4"], cwd=os.path.join(BASEDIR, proc[0]))
 
+
+def join_process(process, timeout):
+  # Process().join(timeout) will hang due to a python 3 bug: https://bugs.python.org/issue28382
+  # We have to poll the exitcode instead
+  t = time.time()
+  while time.time() - t < timeout and process.exitcode is None:
+    time.sleep(0.001)
+
+
 def kill_managed_process(name):
   if name not in running or name not in managed_processes:
     return
@@ -303,18 +324,12 @@ def kill_managed_process(name):
     else:
       running[name].terminate()
 
-    # Process().join(timeout) will hang due to a python 3 bug: https://bugs.python.org/issue28382
-    # We have to poll the exitcode instead
-    # running[name].join(5.0)
-
-    t = time.time()
-    while time.time() - t < 5 and running[name].exitcode is None:
-      time.sleep(0.001)
+    join_process(running[name], 5)
 
     if running[name].exitcode is None:
       if name in unkillable_processes:
         cloudlog.critical("unkillable process %s failed to exit! rebooting in 15 if it doesn't die" % name)
-        running[name].join(15.0)
+        join_process(running[name], 15)
         if running[name].exitcode is None:
           cloudlog.critical("FORCE REBOOTING PHONE!")
           os.system("date >> /sdcard/unkillable_reboot")
@@ -370,13 +385,17 @@ def manager_init(should_register=True):
     pass
 
   # ensure shared libraries are readable by apks
-  os.chmod(BASEDIR, 0o755)
-  os.chmod(os.path.join(BASEDIR, "cereal"), 0o755)
-  os.chmod(os.path.join(BASEDIR, "cereal", "libmessaging_shared.so"), 0o755)
+  if ANDROID:
+    os.chmod(BASEDIR, 0o755)
+    os.chmod(os.path.join(BASEDIR, "cereal"), 0o755)
+    os.chmod(os.path.join(BASEDIR, "cereal", "libmessaging_shared.so"), 0o755)
 
 def manager_thread():
   # now loop
   thermal_sock = messaging.sub_sock('thermal')
+
+  if os.getenv("GET_CPU_USAGE"):
+    proc_sock = messaging.sub_sock('procLog', conflate=True)
 
   cloudlog.info("manager start")
   cloudlog.info({"environ": os.environ})
@@ -394,15 +413,22 @@ def manager_thread():
   for p in persistent_processes:
     start_managed_process(p)
 
-  # start frame
+  # start offroad
   if ANDROID:
     pm_apply_packages('enable')
-    start_frame()
+    start_offroad()
 
   if os.getenv("NOBOARD") is None:
     start_managed_process("pandad")
 
+  if os.getenv("BLOCK") is not None:
+    for k in os.getenv("BLOCK").split(","):
+      del managed_processes[k]
+
   logger_dead = False
+
+  start_t = time.time()
+  first_proc = None
 
   while 1:
     msg = messaging.recv_sock(thermal_sock, wait=True)
@@ -439,6 +465,21 @@ def manager_thread():
     if params.get("DoUninstall", encoding='utf8') == "1":
       break
 
+    if os.getenv("GET_CPU_USAGE"):
+      dt = time.time() - start_t
+
+      # Get first sample
+      if dt > 30 and first_proc is None:
+        first_proc = messaging.recv_sock(proc_sock)
+
+      # Get last sample and exit
+      if dt > 90:
+        first_proc = first_proc
+        last_proc = messaging.recv_sock(proc_sock, wait=True)
+
+        cleanup_all_processes(None, None)
+        sys.exit(print_cpu_usage(first_proc, last_proc))
+
 def manager_prepare(spinner=None):
   # build all processes
   os.chdir(os.path.dirname(os.path.abspath(__file__)))
@@ -459,6 +500,8 @@ def uninstall():
   android.reboot(reason="recovery")
 
 def main():
+  os.environ['PARAMS_PATH'] = PARAMS
+
   # the flippening!
   os.system('LD_LIBRARY_PATH="" content insert --uri content://settings/system --bind name:s:user_rotation --bind value:i:1')
 
@@ -468,38 +511,29 @@ def main():
   params = Params()
   params.manager_start()
 
+  default_params = [
+    ("CommunityFeaturesToggle", "0"),
+    ("CompletedTrainingVersion", "0"),
+    ("IsMetric", "0"),
+    ("RecordFront", "0"),
+    ("HasAcceptedTerms", "0"),
+    ("HasCompletedSetup", "0"),
+    ("IsUploadRawEnabled", "1"),
+    ("IsLdwEnabled", "1"),
+    ("IsGeofenceEnabled", "-1"),
+    ("SpeedLimitOffset", "0"),
+    ("LongitudinalControl", "0"),
+    ("LimitSetSpeed", "0"),
+    ("LimitSetSpeedNeural", "0"),
+    ("LastUpdateTime", datetime.datetime.now().isoformat().encode('utf8')),
+    ("OpenpilotEnabledToggle", "1"),
+    ("LaneChangeEnabled", "1"),
+  ]
+
   # set unset params
-  if params.get("CommunityFeaturesToggle") is None:
-    params.put("CommunityFeaturesToggle", "0")
-  if params.get("CompletedTrainingVersion") is None:
-    params.put("CompletedTrainingVersion", "0")
-  if params.get("IsMetric") is None:
-    params.put("IsMetric", "0")
-  if params.get("RecordFront") is None:
-    params.put("RecordFront", "0")
-  if params.get("HasAcceptedTerms") is None:
-    params.put("HasAcceptedTerms", "0")
-  if params.get("HasCompletedSetup") is None:
-    params.put("HasCompletedSetup", "0")
-  if params.get("IsUploadRawEnabled") is None:
-    params.put("IsUploadRawEnabled", "1")
-  if params.get("IsLdwEnabled") is None:
-    params.put("IsLdwEnabled", "1")
-  if params.get("IsGeofenceEnabled") is None:
-    params.put("IsGeofenceEnabled", "-1")
-  if params.get("SpeedLimitOffset") is None:
-    params.put("SpeedLimitOffset", "0")
-  if params.get("LongitudinalControl") is None:
-    params.put("LongitudinalControl", "0")
-  if params.get("LimitSetSpeed") is None:
-    params.put("LimitSetSpeed", "0")
-  if params.get("LimitSetSpeedNeural") is None:
-    params.put("LimitSetSpeedNeural", "0")
-  if params.get("LastUpdateTime") is None:
-    t = datetime.datetime.now().isoformat()
-    params.put("LastUpdateTime", t.encode('utf8'))
-  if params.get("OpenpilotEnabledToggle") is None:
-    params.put("OpenpilotEnabledToggle", "1")
+  for k, v in default_params:
+    if params.get(k) is None:
+      params.put(k, v)
 
   dragonpilot_set_params(params)
 
@@ -510,9 +544,11 @@ def main():
   if params.get("Passive") is None:
     raise Exception("Passive must be set to continue")
 
+  reg = False if params.get("DragonEnableRegistration", encoding='utf8') == "0" else True
+
   if ANDROID:
     update_apks()
-  manager_init()
+  manager_init(reg)
   manager_prepare(spinner)
   spinner.close()
 
@@ -531,6 +567,8 @@ def main():
 
   try:
     manager_thread()
+  except SystemExit:
+    raise
   except Exception:
     traceback.print_exc()
     crash.capture_exception()

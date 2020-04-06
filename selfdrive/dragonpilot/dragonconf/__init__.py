@@ -1,10 +1,13 @@
 #!/usr/bin/env python2.7
 from common.params import Params, put_nonblocking
+import time
+from math import floor
 
 default_conf = {
-  'DragonEnableDashcam': '1',
+  'DragonEnableDashcam': '0',
   'DragonEnableDriverSafetyCheck': '1',
-  'DragonAutoShutdownAt': '30', # in minute
+  'DragonEnableAutoShutdown': '1',
+  'DragonAutoShutdownAt': '0', # in minute
   'DragonEnableSteeringOnSignal': '0',
   'DragonEnableLogger': '1',
   'DragonEnableUploader': '1',
@@ -13,15 +16,17 @@ default_conf = {
   'DragonCachedModel': '', # for cache car
   'DragonCachedFP': '', # for cache car
   'DragonCachedVIN': '', # for cache car
+  'DragonCachedCarFW': '', # for cache car
+  'DragonCachedSource': '', # for cache car
   'DragonAllowGas': '0',
   'DragonToyotaStockDSU': '0',
   'DragonLatCtrl': '1',
   'DragonUISpeed': '1',
-  'DragonUIEvent': '0',
-  'DragonUIMaxSpeed': '0',
-  'DragonUIFace': '0',
+  'DragonUIEvent': '1',
+  'DragonUIMaxSpeed': '1',
+  'DragonUIFace': '1',
   'DragonUIDev': '0',
-  'DragonUIDevMini': '1',
+  'DragonUIDevMini': '0',
   # 3rd party app
   'DragonEnableTomTom': '0',
   'DragonBootTomTom': '0',
@@ -34,7 +39,7 @@ default_conf = {
   'DragonRunAegis': '0',
   'DragonEnableMixplorer': '0',
   'DragonRunMixplorer': '0',
-  'DragonSteeringMonitorTimer': '3',
+  'DragonSteeringMonitorTimer': '3', # 180 secs
   'DragonCameraOffset': '6',
   'DragonUIVolumeBoost': '0',
   'DragonGreyPandaMode': '0',
@@ -48,27 +53,34 @@ default_conf = {
   'DragonUILead': '1',
   'DragonUIPath': '1',
   'DragonUIBlinker': '0',
+  'DragonUIDMView': '0',
   'DragonEnableDriverMonitoring': '1',
   'DragonCarModel': '',
-  'DragonCarVIN': '',
   'DragonEnableSlowOnCurve': '1',
   'DragonEnableLeadCarMovingAlert': '0',
   'DragonToyotaSnGMod': '0',
   'DragonEnableSRLearner': '1',
   'DragonWazeMode': '0',
   'DragonRunWaze': '0',
-  'DragonEnableAssistedLC': '0',
   'DragonEnableAutoLC': '0',
-  'DragonAssistedLCMinMPH': 37,
+  'DragonAssistedLCMinMPH': 45,
   'DragonAutoLCMinMPH': 60,
   'DragonAutoLCDelay': 2,
   'DragonBTG': 0,
   'DragonBootHotspot': 0,
+  'DragonAccelProfile': '0',
+  'DragonLastModified': str(floor(time.time())),
+  'DragonEnableRegistration': '1',
+  'DragonDynamicFollow': '-2', # OFF = -2, LONG = -1, NORMAL = 0, SHORT = 1
+  'DragonEnableDoorCheck': '1',
+  'DragonEnableSeatBeltCheck': '1',
+  'DragonEnableGearCheck': '1',
+  'DragonEnableTempMonitor': '1',
+  'DragonEnableCurvatureLearner': '0',
+  'DragonCurvatureLearnerOffset': '0.0',
 }
 
 deprecated_conf = {
-  'DragonIsEON': '',
-  'DragonHWChecked': '',
 }
 
 deprecated_conf_invert = {
@@ -79,18 +91,21 @@ deprecated_conf_invert = {
 #   'DragonBBUI': False
 }
 
+def dp_get_last_modified():
+  return Params().get('DragonLastModified', encoding='utf-8')
+
 def dragonpilot_set_params(params):
-  # remove deprecated params
-  for old, new in deprecated_conf.items():
-    if params.get(old) is not None:
-      if new is not None:
-        old_val = str(params.get(old))
-        new_val = old_val
-        # invert the value if true
-        if old in deprecated_conf_invert and deprecated_conf_invert[old] is True:
-          new_val = "1" if old_val == "0" else "0"
-        put_nonblocking(new, new_val)
-      params.delete(old)
+  # # remove deprecated params
+  # for old, new in deprecated_conf.items():
+  #   if params.get(old) is not None:
+  #     if new is not None:
+  #       old_val = str(params.get(old))
+  #       new_val = old_val
+  #       # invert the value if true
+  #       if old in deprecated_conf_invert and deprecated_conf_invert[old] is True:
+  #         new_val = "1" if old_val == "0" else "0"
+  #       put_nonblocking(new, new_val)
+  #     params.delete(old)
 
   # set params
   for key, val in default_conf.items():

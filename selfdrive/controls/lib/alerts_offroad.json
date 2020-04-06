@@ -4,7 +4,7 @@
     "severity": 0
   },
   "Offroad_TemperatureTooHigh": {
-    "text": "EON 溫度過高，系統暫時無法啟用。",
+    "text": "裝置溫度過高，系統暫時無法啟用。",
     "severity": 1
   },
   "Offroad_ConnectivityNeededPrompt": {
@@ -17,7 +17,7 @@
     "severity": 1
   },
   "Offroad_PandaFirmwareMismatch": {
-    "text": "Panda 的固件版本出現異常，系統無法啟用。請重啟您的 EON 刷新 Panda 固件。",
+    "text": "Panda 的韌體版本出現異常，系統無法啟用。請重啟您的裝置以刷新 Panda 韌體。",
     "severity": 1
   },
   "Offroad_InvalidTime": {

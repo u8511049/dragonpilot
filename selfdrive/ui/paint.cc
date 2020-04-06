@@ -108,9 +108,23 @@ static void draw_chevron(UIState *s, float x_in, float y_in, float sz,
   nvgRestore(s->vg);
 }
 
-static void ui_draw_lane_line(UIState *s, const model_path_vertices_data *pvd, NVGcolor color) {
-  const UIScene *scene = &s->scene;
+static void draw_lead(UIState *s, float d_rel, float v_rel, float y_rel){
+    // Draw lead car indicator
+    float fillAlpha = 0;
+    float speedBuff = 10.;
+    float leadBuff = 40.;
+    if (d_rel < leadBuff) {
+      fillAlpha = 255*(1.0-(d_rel/leadBuff));
+      if (v_rel < 0) {
+        fillAlpha += 255*(-1*(v_rel/speedBuff));
+      }
+      fillAlpha = (int)(fmin(fillAlpha, 255));
+    }
+    draw_chevron(s, d_rel, y_rel, 25,
+                 nvgRGBA(201, 34, 49, fillAlpha), nvgRGBA(218, 202, 37, 255));
+}
 
+static void ui_draw_lane_line(UIState *s, const model_path_vertices_data *pvd, NVGcolor color) {
   nvgSave(s->vg);
   nvgTranslate(s->vg, 240.0f, 0.0); // rgb-box space
   nvgTranslate(s->vg, -1440.0f / 2, -1080.0f / 2); // zoom 2x
@@ -204,7 +218,7 @@ static void update_all_track_data(UIState *s) {
 
 
 static void ui_draw_track(UIState *s, bool is_mpc, track_vertices_data *pvd) {
-const UIScene *scene = &s->scene;
+  const UIScene *scene = &s->scene;
   const PathData path = scene->model.path;
   const float *mpc_x_coords = &scene->mpc_x[0];
   const float *mpc_y_coords = &scene->mpc_y[0];
@@ -262,6 +276,30 @@ static void draw_steering(UIState *s, float curvature) {
   }
 
   // ui_draw_lane_edge(s, points, 0.0, nvgRGBA(0, 0, 255, 128), 5);
+}
+
+static void draw_front_frame(UIState *s) {
+  const UIScene *scene = &s->scene;
+
+  float x1, x2, y1, y2;
+  glBindVertexArray(s->frame_vao[1]);
+
+  mat4 *out_mat;
+  out_mat = &s->front_frame_mat;
+  glActiveTexture(GL_TEXTURE0);
+  if (s->cur_vision_front_idx >= 0) {
+    glBindTexture(GL_TEXTURE_2D, s->frame_front_texs[s->cur_vision_front_idx]);
+  }
+
+  glUseProgram(s->frame_program);
+  glUniform1i(s->frame_texture_loc, 0);
+  glUniformMatrix4fv(s->frame_transform_loc, 1, GL_TRUE, out_mat->v);
+
+  assert(glGetError() == GL_NO_ERROR);
+  glEnableVertexAttribArray(0);
+  glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_BYTE, (const void*)0);
+  glDisableVertexAttribArray(0);
+  glBindVertexArray(0);
 }
 
 static void draw_frame(UIState *s) {
@@ -392,20 +430,13 @@ static void ui_draw_world(UIState *s) {
   // Draw lane edges and vision/mpc tracks
   ui_draw_vision_lanes(s);
 
-  if (s->dragon_ui_lead && scene->lead_status) {
-    // Draw lead car indicator
-    float fillAlpha = 0;
-    float speedBuff = 10.;
-    float leadBuff = 40.;
-    if (scene->lead_d_rel < leadBuff) {
-      fillAlpha = 255*(1.0-(scene->lead_d_rel/leadBuff));
-      if (scene->lead_v_rel < 0) {
-        fillAlpha += 255*(-1*(scene->lead_v_rel/speedBuff));
-      }
-      fillAlpha = (int)(fmin(fillAlpha, 255));
+  if (s->dragon_ui_lead) {
+    if (scene->lead_status) {
+      draw_lead(s, scene->lead_d_rel, scene->lead_v_rel, scene->lead_y_rel);
     }
-    draw_chevron(s, scene->lead_d_rel+2.7, scene->lead_y_rel, 25,
-                  nvgRGBA(201, 34, 49, fillAlpha), nvgRGBA(218, 202, 37, 255));
+    if ((scene->lead_status2) && (fabs(scene->lead_d_rel - scene->lead_d_rel2) > 3.0)) {
+      draw_lead(s, scene->lead_d_rel2, scene->lead_v_rel2, scene->lead_y_rel2);
+    }
   }
 }
 
@@ -635,7 +666,7 @@ static void ui_draw_vision_speed(UIState *s) {
     }
     nvgFontFace(s->vg, "sans-bold");
     nvgFontSize(s->vg, 96*2.5);
-    nvgFillColor(s->vg, nvgRGBA(255, 255, 255, 255));
+    nvgFillColor(s->vg, s->scene.brakeLights? COLOR_RED : COLOR_WHITE);
     nvgText(s->vg, viz_speed_x+viz_speed_w/2, 240, speed_str, NULL);
 
     nvgFontFace(s->vg, "sans-regular");
@@ -813,20 +844,28 @@ static void ui_draw_infobar(UIState *s) {
   localtime_r(&rawtime, &timeinfo);
   strftime(date_time, sizeof(date_time),"%D %T", &timeinfo);
 
+  // Create temp string
+  char temp[6];
+  snprintf(temp, sizeof(temp), "%02d°C", s->scene.paTemp);
+
+  // create battery percentage string
+  char battery[4];
+  snprintf(battery, sizeof(battery), "%02d%%", s->scene.batteryPercent);
+
   if (s->dragon_ui_dev_mini) {
     char rel_steer[9];
-    snprintf(rel_steer, sizeof(rel_steer), "%s% 5.1f°", s->scene.angleSteers < 0? "-" : "+", fabs(s->scene.angleSteers));
+    snprintf(rel_steer, sizeof(rel_steer), "%s%05.1f°", s->scene.angleSteers < 0? "-" : "+", fabs(s->scene.angleSteers));
 
     char des_steer[9];
     if (s->scene.engaged) {
-      snprintf(des_steer, sizeof(des_steer), "%s% 5.1f°", s->scene.angleSteersDes < 0? "-" : "+", fabs(s->scene.angleSteersDes));
+      snprintf(des_steer, sizeof(des_steer), "%s%05.1f°", s->scene.angleSteersDes < 0? "-" : "+", fabs(s->scene.angleSteersDes));
     } else {
       snprintf(des_steer, sizeof(des_steer), "%7s", "-");
     }
 
     char lead_dist[8];
     if (s->scene.lead_status) {
-      snprintf(lead_dist, sizeof(lead_dist), "% 6.2fm", s->scene.lead_d_rel);
+      snprintf(lead_dist, sizeof(lead_dist), "%06.2fm", s->scene.lead_d_rel);
     } else {
       snprintf(lead_dist, sizeof(lead_dist), "%7s", "-");
     }
@@ -834,8 +873,10 @@ static void ui_draw_infobar(UIState *s) {
     snprintf(
       infobar,
       sizeof(infobar),
-      "%s /REL: %s /DES: %s /DIS: %s",
+      "%s /TMP: %s /BAT: %s /REL: %s /DES: %s /DIS: %s",
       date_time,
+      temp,
+      battery,
       rel_steer,
       des_steer,
       lead_dist
@@ -844,13 +885,15 @@ static void ui_draw_infobar(UIState *s) {
     snprintf(
       infobar,
       sizeof(infobar),
-      "%s",
-      date_time
+      "%s /TMP: %s /BAT: %s",
+      date_time,
+      temp,
+      battery
     );
   }
 
   nvgBeginPath(s->vg);
-  nvgRoundedRect(s->vg, rect_x, rect_y, rect_w, rect_h, 15);
+  nvgRect(s->vg, rect_x, rect_y, rect_w, rect_h);
   nvgFillColor(s->vg, nvgRGBA(0, 0, 0, 180));
   nvgFill(s->vg);
 
@@ -1158,6 +1201,11 @@ static void ui_draw_vision(UIState *s) {
   if (s->dragon_driving_ui) {
     draw_frame(s);
   }
+  if (s->dragon_ui_dm_view) {
+    glViewport(1240, 110, viz_w*0.4, box_h*0.4);
+    draw_front_frame(s);
+    glClear(GL_STENCIL_BUFFER_BIT);
+  }
   glViewport(0, 0, s->fb_w, s->fb_h);
   glDisable(GL_SCISSOR_TEST);
 
@@ -1202,9 +1250,13 @@ static void ui_draw_blank(UIState *s) {
 
 void ui_draw(UIState *s) {
   if (s->vision_connected && s->active_app == cereal_UiLayoutState_App_home && s->status != STATUS_STOPPED) {
+    ui_draw_sidebar(s);
     ui_draw_vision(s);
   } else {
     ui_draw_blank(s);
+    if (!s->scene.uilayout_sidebarcollapsed) {
+      ui_draw_sidebar(s);
+    }
   }
 
   {
@@ -1219,6 +1271,28 @@ void ui_draw(UIState *s) {
   }
 }
 
+#ifdef NANOVG_GL3_IMPLEMENTATION
+static const char frame_vertex_shader[] =
+  "#version 150 core\n"
+  "in vec4 aPosition;\n"
+  "in vec4 aTexCoord;\n"
+  "uniform mat4 uTransform;\n"
+  "out vec4 vTexCoord;\n"
+  "void main() {\n"
+  "  gl_Position = uTransform * aPosition;\n"
+  "  vTexCoord = aTexCoord;\n"
+  "}\n";
+
+static const char frame_fragment_shader[] =
+  "#version 150 core\n"
+  "precision mediump float;\n"
+  "uniform sampler2D uTexture;\n"
+  "out vec4 vTexCoord;\n"
+  "out vec4 outColor;\n"
+  "void main() {\n"
+  "  outColor = texture(uTexture, vTexCoord.xy);\n"
+  "}\n";
+#else
 static const char frame_vertex_shader[] =
   "attribute vec4 aPosition;\n"
   "attribute vec4 aTexCoord;\n"
@@ -1236,24 +1310,7 @@ static const char frame_fragment_shader[] =
   "void main() {\n"
   "  gl_FragColor = texture2D(uTexture, vTexCoord.xy);\n"
   "}\n";
-
-static const char line_vertex_shader[] =
-  "attribute vec4 aPosition;\n"
-  "attribute vec4 aColor;\n"
-  "uniform mat4 uTransform;\n"
-  "varying vec4 vColor;\n"
-  "void main() {\n"
-  "  gl_Position = uTransform * aPosition;\n"
-  "  vColor = aColor;\n"
-  "}\n";
-
-static const char line_fragment_shader[] =
-  "precision mediump float;\n"
-  "uniform sampler2D uTexture;\n"
-  "varying vec4 vColor;\n"
-  "void main() {\n"
-  "  gl_FragColor = vColor;\n"
-  "}\n";
+#endif
 
 static const mat4 device_transform = {{
   1.0,  0.0, 0.0, 0.0,
@@ -1280,7 +1337,7 @@ static const mat4 full_to_wide_frame_transform = {{
 
 void ui_nvg_init(UIState *s) {
   // init drawing
-  s->vg = nvgCreateGLES3(NVG_ANTIALIAS | NVG_STENCIL_STROKES | NVG_DEBUG);
+  s->vg = nvgCreate(NVG_ANTIALIAS | NVG_STENCIL_STROKES | NVG_DEBUG);
   assert(s->vg);
 
   s->font_courbd = nvgCreateFont(s->vg, "courbd", "../assets/fonts/courbd.ttf");
@@ -1304,6 +1361,25 @@ void ui_nvg_init(UIState *s) {
   assert(s->img_map >= 0);
   s->img_map = nvgCreateImage(s->vg, "../assets/img_map.png", 1);
 
+  assert(s->img_button_settings >= 0);
+  s->img_button_settings = nvgCreateImage(s->vg, "../assets/images/button_settings.png", 1);
+
+  assert(s->img_button_home >= 0);
+  s->img_button_home = nvgCreateImage(s->vg, "../assets/images/button_home.png", 1);
+
+  assert(s->img_battery >= 0);
+  s->img_battery = nvgCreateImage(s->vg, "../assets/images/battery.png", 1);
+
+  assert(s->img_battery_charging >= 0);
+  s->img_battery_charging = nvgCreateImage(s->vg, "../assets/images/battery_charging.png", 1);
+
+  for(int i=0;i<=5;++i) {
+    assert(s->img_network[i] >= 0);
+    char network_asset[32];
+    snprintf(network_asset, sizeof(network_asset), "../assets/images/network_%d.png", i);
+    s->img_network[i] = nvgCreateImage(s->vg, network_asset, 1);
+  }
+
   // init gl
   s->frame_program = load_program(frame_vertex_shader, frame_fragment_shader);
   assert(s->frame_program);
@@ -1313,13 +1389,6 @@ void ui_nvg_init(UIState *s) {
 
   s->frame_texture_loc = glGetUniformLocation(s->frame_program, "uTexture");
   s->frame_transform_loc = glGetUniformLocation(s->frame_program, "uTransform");
-
-  s->line_program = load_program(line_vertex_shader, line_fragment_shader);
-  assert(s->line_program);
-
-  s->line_pos_loc = glGetAttribLocation(s->line_program, "aPosition");
-  s->line_color_loc = glGetAttribLocation(s->line_program, "aColor");
-  s->line_transform_loc = glGetUniformLocation(s->line_program, "uTransform");
 
   glViewport(0, 0, s->fb_w, s->fb_h);
 
