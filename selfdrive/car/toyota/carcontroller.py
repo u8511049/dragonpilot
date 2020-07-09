@@ -53,7 +53,7 @@ class CarController():
     # dp
     self.dragon_enable_steering_on_signal = False
     self.dragon_lat_ctrl = True
-    self.dragon_lane_departure_warning = True
+    self.dragon_lane_departure_warning = False
     self.dragon_toyota_sng_mod = False
     self.dp_last_modified = None
     self.lane_change_enabled = True
