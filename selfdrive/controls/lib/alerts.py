@@ -824,7 +824,7 @@ ALERTS = [
       _("TAKE CONTROL"),
       _("Lane Departure Detected"),
       AlertStatus.userPrompt, AlertSize.mid,
-      Priority.LOW, VisualAlert.steerRequired, AudibleAlert.chimePrompt, 1., 2., 0.),
+      Priority.LOWEST, VisualAlert.steerRequired, AudibleAlert.none, 0., 0., .2),
 
   # dp
   Alert(
