@@ -25,7 +25,7 @@ def main():
       enabled = True if params.get("DragonEnableAutoShutdown", encoding='utf8') == '1' else False
       if enabled:
         try:
-          secs = int(params.get("DragonAutoShutdownAt", encoding='utf8')) * 60
+          secs = int(params.get("DragonAutoShutdownAt", encoding='utf8')) * 600
         except (TypeError, ValueError):
           secs = 0
       dp_last_modified = modified
