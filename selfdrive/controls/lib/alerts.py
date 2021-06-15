@@ -319,8 +319,10 @@ ALERTS = [
       "lowSpeedLockoutNoEntry",
       _("openpilot Unavailable"),
       _("Cruise Fault: Restart the Car"),
-      AlertStatus.normal, AlertSize.mid,
-      Priority.LOW, VisualAlert.none, AudibleAlert.chimeError, .4, 2., 3.),
+      AlertStatus.normal, AlertSize.none,
+      Priority.MID, VisualAlert.none, AudibleAlert.none, .2, 0., 0.),
+      #AlertStatus.normal, AlertSize.mid,
+      #Priority.LOW, VisualAlert.none, AudibleAlert.chimeError, .4, 2., 3.),
 
   Alert(
       "lowBatteryNoEntry",
@@ -476,8 +478,10 @@ ALERTS = [
       "brakeUnavailable",
       _("TAKE CONTROL IMMEDIATELY"),
       _("Cruise Fault: Restart the Car"),
-      AlertStatus.critical, AlertSize.full,
-      Priority.HIGHEST, VisualAlert.steerRequired, AudibleAlert.chimeWarningRepeat, 2.2, 3., 4.),
+      AlertStatus.normal, AlertSize.none,
+      Priority.MID, VisualAlert.none, AudibleAlert.none, .2, 0., 0.),
+      #AlertStatus.critical, AlertSize.full,
+      #Priority.HIGHEST, VisualAlert.steerRequired, AudibleAlert.chimeWarningRepeat, 2.2, 3., 4.),
 
   Alert(
       "gasUnavailable",
@@ -640,8 +644,10 @@ ALERTS = [
       "brakeUnavailableNoEntry",
       _("openpilot Unavailable"),
       _("Cruise Fault: Restart the Car"),
-      AlertStatus.normal, AlertSize.mid,
-      Priority.LOW, VisualAlert.none, AudibleAlert.chimeError, .4, 2., 3.),
+      AlertStatus.normal, AlertSize.none,
+      Priority.MID, VisualAlert.none, AudibleAlert.none, .2, 0., 0.),
+      #AlertStatus.normal, AlertSize.mid,
+      #Priority.LOW, VisualAlert.none, AudibleAlert.chimeError, .4, 2., 3.),
 
   Alert(
       "gasUnavailableNoEntry",
