@@ -66,15 +66,15 @@ ALERTS = [
       "",
       "",
       AlertStatus.normal, AlertSize.none,
-      Priority.MID, VisualAlert.none, AudibleAlert.chimeEngage, .2, 0., 0.),
+      Priority.MID, VisualAlert.none, AudibleAlert.none, .2, 0., 0.),
 
   Alert(
       "disable",
       "",
       "",
       AlertStatus.normal, AlertSize.none,
-      Priority.MID, VisualAlert.none, AudibleAlert.chimeDisengage, .2, 0., 0.),
-
+      Priority.MID, VisualAlert.none, AudibleAlert.none, .2, 0., 0.),
+    
   Alert(
       "fcw",
       "BRAKE!",
@@ -318,7 +318,7 @@ ALERTS = [
       "openpilot Unavailable",
       "Cruise Fault: Restart the Car",
       AlertStatus.normal, AlertSize.mid,
-      Priority.LOW, VisualAlert.none, AudibleAlert.chimeError, .4, 2., 3.),
+      Priority.LOW, VisualAlert.none, AudibleAlert.none, .4, 2., 3.),
 
   Alert(
       "lowBatteryNoEntry",
@@ -645,7 +645,7 @@ ALERTS = [
       "openpilot Unavailable",
       "Cruise is Off",
       AlertStatus.normal, AlertSize.mid,
-      Priority.LOW, VisualAlert.none, AudibleAlert.chimeError, .4, 2., 3.),
+      Priority.LOW, VisualAlert.none, AudibleAlert.none, .4, 2., 3.),
 
   Alert(
       "noTargetNoEntry",
