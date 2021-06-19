@@ -31,7 +31,7 @@
 
 
 # Android system locale, zh-TW = Traditional Chinese, zh-CN = Simplified Chinese
-lang=zh-TW
+#lang=en
 
 update_font=0
 remove_old_font=0
@@ -67,5 +67,5 @@ if [ $update_font -eq "1" ] || [ $remove_old_font -eq "1" ]; then
     # change system locale
 fi
 
-setprop persist.sys.locale $lang
-setprop persist.sys.local $lang
+#setprop persist.sys.locale $lang
+#setprop persist.sys.local $lang
