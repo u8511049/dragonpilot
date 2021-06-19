@@ -31,7 +31,7 @@
 
 
 # Android system locale, zh-TW = Traditional Chinese, zh-CN = Simplified Chinese
-#lang=en
+lang=zh-TW
 
 update_font=0
 remove_old_font=0
