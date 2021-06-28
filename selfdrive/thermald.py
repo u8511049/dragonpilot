@@ -263,29 +263,28 @@ def thermald_thread():
     fan_speed = handle_fan(max_cpu_temp, bat_temp, fan_speed, ignition)
     msg.thermal.fanSpeed = fan_speed
 
-    # thermal logic with hysterisis
-    #disable temp. monitor for X722 phone abnormal 20210628
-    if true:
-      thermal_status = ThermalStatus.green
-    elif max_cpu_temp > 107. or bat_temp >= 63.:
+    # thermal logic with hysterisis 
+    # cpu_temp +10 in all 20210628 for X722 temp. error
+    if max_cpu_temp > 117. or bat_temp >= 63.:
       # onroad not allowed
       thermal_status = ThermalStatus.danger
-    elif max_comp_temp > 92.5 or bat_temp > 60.: # CPU throttling starts around ~90C
+    elif max_comp_temp > 102.5 or bat_temp > 60.: # CPU throttling starts around ~90C
       # hysteresis between onroad not allowed and engage not allowed
       thermal_status = clip(thermal_status, ThermalStatus.red, ThermalStatus.danger)
-    elif max_cpu_temp > 87.5:
+    elif max_cpu_temp > 97.5:
       # hysteresis between engage not allowed and uploader not allowed
       thermal_status = clip(thermal_status, ThermalStatus.yellow, ThermalStatus.red)
-    elif max_cpu_temp > 80.0:
+    elif max_cpu_temp > 90.0:
       # uploader not allowed
       thermal_status = ThermalStatus.yellow
-    elif max_cpu_temp > 75.0:
+    elif max_cpu_temp > 85.0:
       # hysteresis between uploader not allowed and all good
       thermal_status = clip(thermal_status, ThermalStatus.green, ThermalStatus.yellow)
     else:
       # all good
       thermal_status = ThermalStatus.green
       
+   
 
     # **** starting logic ****
 
