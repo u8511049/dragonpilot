@@ -284,8 +284,8 @@ def thermald_thread():
       thermal_status = ThermalStatus.green
       
     #disable temp. monitor for X722 phone abnormal 20210628
-    if true:
-      thermal_status = ThermalStatus.green
+    #if true:
+    #  thermal_status = ThermalStatus.green
 
     # **** starting logic ****
 
