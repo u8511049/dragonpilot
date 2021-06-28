@@ -264,7 +264,10 @@ def thermald_thread():
     msg.thermal.fanSpeed = fan_speed
 
     # thermal logic with hysterisis
-    if max_cpu_temp > 107. or bat_temp >= 63.:
+    #disable temp. monitor for X722 phone abnormal 20210628
+    if true:
+      thermal_status = ThermalStatus.green
+    elif max_cpu_temp > 107. or bat_temp >= 63.:
       # onroad not allowed
       thermal_status = ThermalStatus.danger
     elif max_comp_temp > 92.5 or bat_temp > 60.: # CPU throttling starts around ~90C
@@ -283,9 +286,6 @@ def thermald_thread():
       # all good
       thermal_status = ThermalStatus.green
       
-    #disable temp. monitor for X722 phone abnormal 20210628
-    #if true:
-    #  thermal_status = ThermalStatus.green
 
     # **** starting logic ****
 
